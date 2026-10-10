@@ -7,3 +7,9 @@ logs/
 models/
 dist/
 
+
+# atc_agent training outputs
+runs/
+runs_*.log
+competition_eval_*.csv
+results/*.zip

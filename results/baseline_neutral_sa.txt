@@ -1,0 +1,28 @@
+Reading config from C:\Users\Mark\bluesky\settings.cfg
+Using compiled geo functions
+Reading magnetic variation data
+Warning: RTree could not be loaded. areafilter get_intersecting and get_knearest won't work
+Loading global navigation database...
+Reading cache: C:\Users\Mark\bluesky\cache\navdata.p
+Successfully loaded OpenAP performance model
+Failed to load BADA performance model
+Successfully loaded legacy performance model
+Successfully loaded plugin AREA
+Successfully loaded plugin DATAFEED
+
+### Single-agent — mean over 1000 episodes (seed 42)
+
+| Metric | Mean | Std |
+| --- | ---: | ---: |
+| Goal completion rate [%] | 100.000 | 0.000 |
+| Flight time [s] | 852.011 | 134.981 |
+| Intrusion events | 1.127 | 1.134 |
+| Intrusion time [s] | 96.319 | 146.558 |
+| Restricted-area events | 0.813 | 0.885 |
+| Restricted-area time [s] | 129.934 | 163.211 |
+| Sector-exit events | 0.000 | 0.000 |
+| Time outside sector [s] | 0.000 | 0.000 |
+
+_total_reward (own reward, not comparable across teams): -225.260 ± 187.717_
+
+wrote per-episode metrics to results/baseline_neutral_sa.csv

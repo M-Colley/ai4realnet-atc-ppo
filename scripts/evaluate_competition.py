@@ -42,6 +42,12 @@ METRIC_KEYS = [
 
 
 # ==================== EDIT THESE TWO FOR YOUR SUBMISSION ======================
+# Our submission: when --model is given, the official envs are subclassed with
+# our MDP hooks (atc_agent/envs.py: _get_obs / _get_action / _get_reward only);
+# without --model the stock env + neutral policy baseline is evaluated.
+_AGENT = {"on": False}
+
+
 def make_env(kind, n_agents=N_AGENTS_MA):
     """Return the environment to evaluate.
 
@@ -50,6 +56,11 @@ def make_env(kind, n_agents=N_AGENTS_MA):
     Do NOT change the fixed scoring params (intrusion_distance, episode_time_limit,
     distance_margin, n_intruders/n_agents, n_obstacles, ...).
     """
+    if _AGENT["on"]:
+        from atc_agent.envs import AgentCompetitionEnv, AgentCompetitionZooEnv
+        if kind == "sa":
+            return AgentCompetitionEnv()
+        return AgentCompetitionZooEnv(n_agents=n_agents)
     if kind == "sa":
         import gymnasium as gym
         import bluesky_gym
@@ -70,7 +81,9 @@ def load_policy(kind, model_path=None):
         return lambda obs: model.predict(obs, deterministic=True)[0]
     """
     if model_path is not None:
-        raise NotImplementedError("load your trained policy in load_policy()")
+        from atc_agent.inference import load_act
+        _AGENT["on"] = True
+        return load_act(model_path, deterministic=True)
     return lambda obs: np.zeros(2, dtype=np.float32)
 # =============================================================================
 

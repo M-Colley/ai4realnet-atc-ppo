@@ -52,7 +52,8 @@ def policy_from_model(model_path):
     """
     if model_path is None:
         return None
-    raise NotImplementedError("plug your trained policy into policy_from_model()")
+    from atc_agent.inference import load_act
+    return load_act(model_path, deterministic=True)
 
 
 def rollout_single_agent(seed, act=None, max_steps=400):
@@ -61,7 +62,11 @@ def rollout_single_agent(seed, act=None, max_steps=400):
     import bluesky_gym
     bluesky_gym.register_envs()
 
-    env = gym.make("CompetitionEnv-v0", render_mode="rgb_array")
+    if act is None:
+        env = gym.make("CompetitionEnv-v0", render_mode="rgb_array")
+    else:   # our trained policy needs our MDP hooks (atc_agent/envs.py)
+        from atc_agent.envs import AgentCompetitionEnv
+        env = AgentCompetitionEnv(render_mode="rgb_array")
     frames = []
     obs, _ = env.reset(seed=seed)
     frames.append(env.render())
@@ -80,7 +85,11 @@ def rollout_multi_agent(seed, n_agents=10, act=None, max_steps=400):
     """Collect rgb_array frames for one CompetitionZooEnv episode."""
     from bluesky_zoo.competition_v0 import CompetitionZooEnv
 
-    env = CompetitionZooEnv(render_mode="rgb_array", n_agents=n_agents)
+    if act is None:
+        env = CompetitionZooEnv(render_mode="rgb_array", n_agents=n_agents)
+    else:
+        from atc_agent.envs import AgentCompetitionZooEnv
+        env = AgentCompetitionZooEnv(render_mode="rgb_array", n_agents=n_agents)
     frames = []
     observations, _ = env.reset(seed=seed)
     frames.append(env.render())
