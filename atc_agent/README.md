@@ -21,15 +21,14 @@ scenarios inside one BlueSky process.
 
 ## Setup on the training PC
 
-Copy the whole `bluesky-gym` folder to the training machine, **excluding**
-`.venv/` and `runs/`. Our changes are `atc_agent/`, `tests/`, `docs/solution/`,
-the two edit points in `scripts/evaluate_competition.py` and
-`scripts/record_competition_gifs.py`, and `.gitignore`. Alternatively, commit
-them to a branch of your fork and clone that. Linux and Windows both work
-(workers use `forkserver` / `spawn`).
+The code lives in the private repo `M-Colley/ai4realnet-atc-competition`
+(branch `main`, built on top of the official `AI4REAL-NET-Competition`
+branch). Linux and Windows both work (workers use `forkserver` / `spawn`).
 
 ```bash
-cd bluesky-gym
+gh repo clone M-Colley/ai4realnet-atc-competition
+cd ai4realnet-atc-competition
+git remote add upstream https://github.com/TUDelft-CNS-ATM/bluesky-gym.git   # to pull organiser updates
 uv sync
 # GPU build of torch (the lockfile pins the CPU wheel). cu130 needs an NVIDIA driver >= 580;
 # use .../whl/cu126 for older drivers (not RTX 50xx).
