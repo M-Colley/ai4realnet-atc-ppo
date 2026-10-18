@@ -70,6 +70,11 @@ DEFAULT_REWARD = dict(
     lam_intr=1.0, lam_ra=1.0, lam_sec=1.0,   # adaptive (Lagrangian) safety multipliers
 )
 
+# violations already present when an aircraft spawns (the generator does not keep
+# scripted intruders 5 NM away from the SA start): counted by the official
+# metrics, but no policy can avoid them
+SPAWN_KEYS = ["intrusion_events", "restricted_area_events", "sector_exit_events"]
+
 EPISODE_TIME_LIMIT = 3000.0
 GOAL_MARGIN_KM = 5.0
 AC_SPD = 150.0
@@ -151,6 +156,7 @@ class BatchedCompetitionSim:
         self.goal = np.zeros((B, 2))
         self.ep_len = np.zeros(B, dtype=int)
         self.phi = np.zeros(B)
+        self.spawn_viol = np.zeros((B, len(SPAWN_KEYS)))
         self.acc = {k: np.zeros(B) for k in ("dt", "prox_ac", "prox_obs", "prox_sec")}
 
         # slot tables
@@ -349,6 +355,7 @@ class BatchedCompetitionSim:
             v[seats] = 0.0
         # the official envs call _update_metrics(dt=0) at reset
         self._update_metrics(seats, 0.0)
+        self.spawn_viol[seats] = np.stack([self.metrics[k][seats] for k in SPAWN_KEYS], axis=1)
 
     # ------------------------------------------------------------ metrics
     def _update_metrics(self, seats, dt):
@@ -547,6 +554,7 @@ class BatchedCompetitionSim:
                     "metrics": {key: float(m[key][seat]) for key in METRIC_KEYS},
                     "mode": "ma" if self.seat_is_ma[seat] else "sa",
                     "orig": bool(self.orig[seat]),
+                    "spawn": dict(zip(SPAWN_KEYS, self.spawn_viol[seat].tolist())),
                     "n_intruders": int(self.slot_nint[self.seat_slot[seat]]),
                     "TimeLimit.truncated": bool(truncated[seat]),
                 }
@@ -580,6 +588,7 @@ class BatchedCompetitionSim:
                                 "episode": {"r": float(m["total_reward"][s]), "l": int(self.ep_len[s]), "t": 0.0},
                                 "metrics": {key: float(m[key][s]) for key in METRIC_KEYS},
                                 "mode": "ma", "orig": bool(self.orig[s]),
+                                "spawn": dict(zip(SPAWN_KEYS, self.spawn_viol[s].tolist())),
                                 "n_intruders": int(self.slot_nint[kk]),
                                 "TimeLimit.truncated": True, "terminal_observation": o,
                             }

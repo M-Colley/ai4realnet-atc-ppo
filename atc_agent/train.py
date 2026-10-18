@@ -12,6 +12,11 @@ env has workers * (sa_slots + 10 * ma_slots) seats. All seats share one policy
 Safety is handled as a constrained problem: the per-category penalty
 multipliers (intrusion / restricted area / sector exit) are adapted by dual
 ascent in log space towards target violation rates (events per episode).
+By default the constraint counts only *avoidable* violations: events already
+present at spawn (about 0.1 intrusions per SA episode, from intruders spawned
+within 5 NM of the start) are excluded, otherwise the targets are unreachable
+and the multipliers sit at --lam-max forever (``--avoidable-constraint 0``
+restores the original behaviour, used for runs/main).
 """
 
 import argparse
@@ -81,6 +86,9 @@ class CompetitionCallback(BaseCallback):
             if "metrics" in info:
                 m = dict(info["metrics"])
                 m["mode"], m["orig"], m["nint"] = info["mode"], info["orig"], info["n_intruders"]
+                spawn = info.get("spawn", {})
+                for k in self.LAMS.values():
+                    m[k + "_avoidable"] = m[k] - spawn.get(k, 0.0)
                 self.buf.append(m)
         return True
 
@@ -93,7 +101,7 @@ class CompetitionCallback(BaseCallback):
         }
         keys = ["waypoint_reached", "flight_time", "intrusion_events", "intrusion_time",
                 "restricted_area_events", "time_in_restricted_area", "sector_exit_events",
-                "time_outside_sector", "total_reward"]
+                "time_outside_sector", "total_reward", "intrusion_events_avoidable"]
         stats = {}
         for g, recs in groups.items():
             if recs:
@@ -111,6 +119,8 @@ class CompetitionCallback(BaseCallback):
         recs = groups["sa_all"] + groups["ma_all"]
         if self.a.adapt and recs and self.num_timesteps - self.t_start >= self.a.adapt_warmup:
             for lam, key in self.LAMS.items():
+                if self.a.avoidable_constraint:
+                    key += "_avoidable"
                 rate = float(np.mean([r[key] for r in recs]))
                 target = getattr(self.a, f"target_{lam[4:]}")
                 logl = math.log(self.lam[lam]) + self.a.adapt_lr * (rate - target)
@@ -200,6 +210,8 @@ def main():
     p.add_argument("--lam-min", type=float, default=1.0)
     p.add_argument("--lam-max", type=float, default=8.0)
     p.add_argument("--reset-lambda", action="store_true")
+    p.add_argument("--avoidable-constraint", type=int, default=1,
+                   help="safety constraint on avoidable violations only (excludes those present at spawn)")
     p.add_argument("--eval-every", type=float, default=10e6)
     p.add_argument("--eval-sa", type=int, default=200)
     p.add_argument("--eval-ma", type=int, default=20)
@@ -219,6 +231,8 @@ def main():
 
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
+    # argument validation in torch.distributions forces GPU syncs in every minibatch (~15-25% of the update)
+    th.distributions.Distribution.set_default_validate_args(False)
     sa_choices = parse_choices(args.sa_intruders)
     cfgs = [dict(sa_slots=args.sa_slots, ma_slots=args.ma_slots, sa_intruders=sa_choices,
                  action_frequency=args.action_frequency, seed=args.seed * 100_003 + 7919 * i)

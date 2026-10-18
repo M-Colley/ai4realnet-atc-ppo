@@ -17,6 +17,7 @@ scenarios inside one BlueSky process.
 | `envs.py` | Our hooks (`_get_obs`, `_get_action`, `_get_reward`) on the **official** `CompetitionEnv` / `CompetitionZooEnv`; used by the official scoring scripts. |
 | `train.py` | PPO training with adaptive safety multipliers, held-out evaluation, checkpoint selection. |
 | `fast_eval.py` | Exact fast evaluation (held-out set, or the official seed-42 stream). |
+| `diagnose_sa.py` | Violation diagnosis: onset time / geometry of every SA violation, plus an escape search (exact replay + branching) that tells which violations any manoeuvre could have avoided. |
 | `../tests/test_equivalence.py` | Proves BlueSky-Batch == official envs (obs, states, all metrics) step by step. |
 
 ## Setup on the training PC
@@ -116,6 +117,30 @@ Logged groups: `sa10/*` (single-agent episodes in the exact competition config),
 `ma_all/*` (incl. respawned agents, which are truncated at scenario resets),
 `eval_sa/*`, `eval_ma/*` (deterministic policy on 200 + 20 held-out scenarios,
 seed 2024), `safety/lam_*` (adaptive multipliers).
+
+### Unavoidable violations and the safety constraint
+
+The official generator does not keep scripted intruders 5 NM away from the SA
+start, so some SA episodes begin in loss of separation. These count as
+intrusion events but no policy can avoid them:
+
+| Scenario stream (1000 SA episodes) | Intrusions present at t=0 per episode |
+| --- | ---: |
+| official seed 42 | 0.100 |
+| held-out seed 2024 | 0.103 |
+| diagnosis seed 777 | 0.116 |
+
+`python -m atc_agent.diagnose_sa --model runs/main/best.zip --out runs/diag` on
+the 490M-step checkpoint (seed 777): 0.151 intrusions/episode, of which 116/151
+are present at spawn, 14 more start within 33 s with the intruder spawned
+5-8 NM away, and only ~18 could be removed by some manoeuvre 10-80 s earlier.
+Restricted-area (0.015) and sector-exit (0.008) events are mostly avoidable.
+
+Because the original constraint targets (`--target-intr 0.02`) sit below this
+floor, the multipliers stayed at `--lam-max` during `runs/main`. The training
+now constrains *avoidable* violations only (`--avoidable-constraint 1`,
+default); `--avoidable-constraint 0` reproduces `runs/main`. Logged groups
+include `*/intrusion_events_avoidable`.
 
 ## Evaluation
 
