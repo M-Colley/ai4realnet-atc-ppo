@@ -18,7 +18,7 @@ from atc_agent.batched_env import DEFAULT_REWARD, GOAL_MARGIN_KM
 from atc_agent.geometry import kwikqdrdist
 
 
-def traffic_obs_inputs(own, others, others_is_agent, others_goal, goal, geo, mode_ma):
+def traffic_obs_inputs(own, others, others_is_agent, others_goal, goal, geo, mode_ma, elapsed_s):
     """Observation inputs for one ownship read straight from BlueSky state.
     Mirrors ``BatchedCompetitionSim._obs_inputs`` field by field."""
     own = int(own)
@@ -40,6 +40,7 @@ def traffic_obs_inputs(own, others, others_is_agent, others_goal, goal, geo, mod
         "own_selspd": bs.traf.selspd[[own]],
         "goal_lat": np.array([goal[0]], dtype=float), "goal_lon": np.array([goal[1]], dtype=float),
         "mode_ma": np.array([float(mode_ma)]),
+        "elapsed_s": np.array([float(elapsed_s)]),
         "center": geo["center"][None], "sector": geo["sector"][None],
         "obst": geo["obst"][None], "obst_valid": geo["obst_valid"][None],
         "obst_centroid": geo["obst_centroid"][None], "obst_radius": geo["obst_radius"][None],
@@ -107,7 +108,8 @@ class AgentCompetitionEnv(_HooksMixin, CompetitionEnv):
         others = [o for o in others if o >= 0]
         s = traffic_obs_inputs(bs.traf.id2idx(ac_id), others, [False] * len(others),
                                np.zeros((len(others), 2)), (self.goal_lat, self.goal_lon),
-                               self._geometry(), mode_ma=0)
+                               self._geometry(), mode_ma=0,
+                               elapsed_s=self.metrics[ac_id]["flight_time"])
         return build_observations(s)[0][0]
 
     def _get_action(self, ac_id, action):
@@ -137,7 +139,8 @@ class AgentCompetitionZooEnv(_HooksMixin, CompetitionZooEnv):
         idx = [idx[n] for n in keep]
         goals = np.array([self._goal[others[n]] for n in keep], dtype=float).reshape(-1, 2)
         s = traffic_obs_inputs(bs.traf.id2idx(ac_id), idx, [True] * len(idx), goals,
-                               self._goal[ac_id], self._geometry(), mode_ma=1)
+                               self._goal[ac_id], self._geometry(), mode_ma=1,
+                               elapsed_s=self.sim_time)
         return build_observations(s)[0][0]
 
     def _get_action(self, ac_id, action):

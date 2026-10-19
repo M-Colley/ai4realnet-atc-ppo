@@ -17,6 +17,7 @@ scenarios inside one BlueSky process.
 | `envs.py` | Our hooks (`_get_obs`, `_get_action`, `_get_reward`) on the **official** `CompetitionEnv` / `CompetitionZooEnv`; used by the official scoring scripts. |
 | `train.py` | PPO training with adaptive safety multipliers, held-out evaluation, checkpoint selection. |
 | `fast_eval.py` | Exact fast evaluation (held-out set, or the official seed-42 stream). |
+| `expand_obs.py` | Converts a trained model to a wider ego observation (zero-weight new inputs, exact function preservation). |
 | `diagnose_sa.py` | Violation diagnosis: onset time / geometry of every SA violation, plus an escape search (exact replay + branching) that tells which violations any manoeuvre could have avoided. |
 | `../tests/test_equivalence.py` | Proves BlueSky-Batch == official envs (obs, states, all metrics) step by step. |
 
@@ -141,6 +142,26 @@ floor, the multipliers stayed at `--lam-max` during `runs/main`. The training
 now constrains *avoidable* violations only (`--avoidable-constraint 1`,
 default); `--avoidable-constraint 0` reproduces `runs/main`. Logged groups
 include `*/intrusion_events_avoidable`.
+
+### Time limit as part of the task (branch `time-aware`)
+
+On the official seed-42 stream the 1B-step policy reaches the goal in 99.2% (SA)
+and 99.17% (MA agent-episodes) of cases. Every failure is a 3000 s timeout: the
+aircraft circles or follows obstacle edges inside clusters of restricted areas
+(`runs/diag/sa_failures_seed42.png`). Stochastic actions barely help (99.5%).
+The time limit was invisible to the policy (truncation was bootstrapped), so
+nothing pushed it out of these traps. Following Pardo et al. (ICML 2018, "Time
+Limits in Reinforcement Learning"):
+
+- the ego observation ends with the elapsed fraction of the 3000 s budget
+  (SA flight time / MA scenario clock, as the official envs define it);
+- running out of time is terminal with `--timeout-penalty` (default 20), not
+  bootstrapped.
+
+`python -m atc_agent.expand_obs runs/main/final.zip runs/ta_init/init.zip`
+carries a trained policy over to the wider observation with zero weights on the
+new input (verified: identical actions and values), so the time-aware policy is
+fine-tuned from the 1B-step model instead of trained from scratch.
 
 ## Evaluation
 

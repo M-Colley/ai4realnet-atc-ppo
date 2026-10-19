@@ -12,8 +12,10 @@ Layout (all in the ownship body frame: +x nose, +y starboard)::
       | obstacle tokens (N_OBS x OB_DIM) | obstacle mask (N_OBS) ]
 
 ego      goal geometry, own speed/autopilot state, sector + obstacle summary,
-         and a 32-ray "lidar" (closeness to obstacle edges and to the sector
-         boundary) that captures the true polygon shapes.
+         a 32-ray "lidar" (closeness to obstacle edges and to the sector
+         boundary) that captures the true polygon shapes, and the elapsed
+         fraction of the 3000 s episode budget (last entry: makes the time
+         limit part of the state, so a timeout can be treated as a failure).
 aircraft the M_AC most threatening other aircraft, ranked by predicted miss
          distance over a 300 s horizon. Each token carries relative state, CPA
          (tcpa / dcpa) features, a learner-vs-scripted flag and the aircraft's
@@ -40,7 +42,9 @@ V_MAX = 8            # obstacle vertices (generator: 3..8)
 S_MAX = 40           # sector vertices (generator adds points until area is met)
 
 EGO_BASE = 20
-EGO_DIM = EGO_BASE + 2 * N_RAYS
+EGO_DIM = EGO_BASE + 2 * N_RAYS + 1
+TIME_IDX = EGO_DIM - 1   # elapsed fraction of the episode time budget
+EPISODE_TIME_S = 3000.0
 AC_DIM = 23
 OB_DIM = 15
 AC_OFF = EGO_DIM
@@ -87,7 +91,7 @@ def build_observations(s):
 
     ``s`` is a dict of numpy arrays for B ownships:
       own_lat, own_lon, own_hdg, own_tas, own_cas, own_seltrk, own_selspd  (B,)
-      goal_lat, goal_lon, mode_ma                                          (B,)
+      goal_lat, goal_lon, mode_ma, elapsed_s (episode clock, seconds)     (B,)
       center (B, 2)    sector (B, S_MAX, 2)
       obst (B, N_OBS, V_MAX, 2)  obst_valid (B, N_OBS)  obst_centroid (B, N_OBS, 2)
       obst_radius (B, N_OBS)
@@ -262,7 +266,8 @@ def build_observations(s):
     ego[:, 18] = np.clip(n_pred_short / 3.0, 0, 3)
     ego[:, 19] = np.clip(np.where(np.isfinite(min_dmin), min_dmin, 30.0) / SEP_NM, 0, 6)
     ego[:, EGO_BASE:EGO_BASE + N_RAYS] = 1.0 - lid_ob / RAY_RANGE_NM
-    ego[:, EGO_BASE + N_RAYS:] = 1.0 - lid_sec / RAY_RANGE_NM
+    ego[:, EGO_BASE + N_RAYS:TIME_IDX] = 1.0 - lid_sec / RAY_RANGE_NM
+    ego[:, TIME_IDX] = np.clip(s["elapsed_s"] / EPISODE_TIME_S, 0.0, 1.0)
 
     obs = np.concatenate([
         ego,

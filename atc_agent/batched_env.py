@@ -67,6 +67,7 @@ DEFAULT_REWARD = dict(
     prox_obs=0.005, prox_obs_nm=3.0,    # soft buffer outside obstacles
     prox_sec=0.005, prox_sec_nm=3.0,    # soft buffer inside the sector edge
     pred_conflict=0.002,                # per second per predicted conflict within 120 s
+    timeout=20.0,                       # goal not reached within the 3000 s budget (terminal, no bootstrap)
     lam_intr=1.0, lam_ra=1.0, lam_sec=1.0,   # adaptive (Lagrangian) safety multipliers
 )
 
@@ -445,6 +446,9 @@ class BatchedCompetitionSim:
             "own_selspd": bs.traf.selspd[own],
             "goal_lat": self.goal[seats, 0], "goal_lon": self.goal[seats, 1],
             "mode_ma": self.seat_is_ma[seats].astype(float),
+            # episode clock as the official envs define it: SA flight time,
+            # MA shared scenario clock (the time limit applies to it)
+            "elapsed_s": np.where(self.seat_is_ma[seats], self.slot_t[k], self.metrics["flight_time"][seats]),
             "center": self.g["center"][k], "sector": self.g["sector"][k],
             "obst": self.g["obst"][k], "obst_valid": self.g["obst_valid"][k],
             "obst_centroid": self.g["obst_centroid"][k], "obst_radius": self.g["obst_radius"][k],
@@ -506,7 +510,10 @@ class BatchedCompetitionSim:
         # truncation
         truncated = np.zeros(B, dtype=bool)
         sa_seat = ~self.seat_is_ma
-        truncated |= sa_seat & self.active & (self.metrics["flight_time"] >= EPISODE_TIME_LIMIT)
+        # running out of the time budget is a task failure: the elapsed time is
+        # observed, so it is treated as terminal (penalised, not bootstrapped)
+        timeout = sa_seat & self.active & (self.metrics["flight_time"] >= EPISODE_TIME_LIMIT)
+        truncated |= timeout
         ma_reset_slots = []
         for kk, kind in enumerate(self.kinds):
             if kind != "ma":
@@ -517,6 +524,8 @@ class BatchedCompetitionSim:
                     or (not self.respawn and not np.any(self.active[seats]))):
                 ma_reset_slots.append(kk)
                 truncated[seats] |= self.active[seats]
+                if self.slot_t[kk] >= EPISODE_TIME_LIMIT:
+                    timeout[seats] |= self.active[seats]
 
         # reward over this decision interval
         m = self.metrics
@@ -530,6 +539,7 @@ class BatchedCompetitionSim:
                - r["prox_ac"] * self.acc["prox_ac"]
                - r["prox_obs"] * self.acc["prox_obs"]
                - r["prox_sec"] * self.acc["prox_sec"])
+        rew -= r["timeout"] * timeout
         rew = np.where(stepped, rew, 0.0)
 
         done = terminated | truncated
@@ -556,7 +566,8 @@ class BatchedCompetitionSim:
                     "orig": bool(self.orig[seat]),
                     "spawn": dict(zip(SPAWN_KEYS, self.spawn_viol[seat].tolist())),
                     "n_intruders": int(self.slot_nint[self.seat_slot[seat]]),
-                    "TimeLimit.truncated": bool(truncated[seat]),
+                    "TimeLimit.truncated": bool(truncated[seat] and not timeout[seat]),
+                    "timeout": bool(timeout[seat]),
                 }
                 if seat in term_map:
                     info["terminal_observation"] = term_map[seat]
