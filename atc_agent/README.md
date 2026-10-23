@@ -17,6 +17,7 @@ scenarios inside one BlueSky process.
 | `envs.py` | Our hooks (`_get_obs`, `_get_action`, `_get_reward`) on the **official** `CompetitionEnv` / `CompetitionZooEnv`; used by the official scoring scripts. |
 | `train.py` | PPO training with adaptive safety multipliers, held-out evaluation, checkpoint selection. |
 | `fast_eval.py` | Exact fast evaluation (held-out set, or the official seed-42 stream). |
+| `routing.py` | Geodesic cost-to-go field (grid Dijkstra) for progress shaping and the route hint. |
 | `expand_obs.py` | Converts a trained model to a wider ego observation (zero-weight new inputs, exact function preservation). |
 | `diagnose_sa.py` | Violation diagnosis: onset time / geometry of every SA violation, plus an escape search (exact replay + branching) that tells which violations any manoeuvre could have avoided. |
 | `../tests/test_equivalence.py` | Proves BlueSky-Batch == official envs (obs, states, all metrics) step by step. |
@@ -162,6 +163,24 @@ Limits in Reinforcement Learning"):
 carries a trained policy over to the wider observation with zero weights on the
 new input (verified: identical actions and values), so the time-aware policy is
 fine-tuned from the 1B-step model instead of trained from scratch.
+
+### Geodesic progress shaping and route hint (branch `geodesic`)
+
+The time-aware fine-tune did not reduce timeouts (seed 42: 9/1000 SA). The
+trapped episodes are the ones whose shortest restricted-area-free route is a
+large detour: for 4 of the 6 routable SA failures it is 2.1-2.8x the straight
+line (seed-42 median 1.008, 99th percentile 2.16); 2 failures have no free route
+at all. The straight-line progress potential rewards flying *into* those
+pockets. `routing.py` computes a cost-to-go field per scenario and goal (96x96
+grid, 16-connected Dijkstra; restricted areas and the outside of the sector
+cost 5x per NM instead of being forbidden), interpolated bilinearly so the
+potential is continuous everywhere, including inside areas:
+
+- the progress potential uses this geodesic distance (`--geodesic-progress 1`);
+- the ego observation gets 4 route entries: geodesic distance, steepest-descent
+  direction (cos/sin, body frame), detour ratio.
+
+The policy still issues every command; the field is reward / observation design.
 
 ## Evaluation
 

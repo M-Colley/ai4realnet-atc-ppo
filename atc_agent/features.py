@@ -14,8 +14,10 @@ Layout (all in the ownship body frame: +x nose, +y starboard)::
 ego      goal geometry, own speed/autopilot state, sector + obstacle summary,
          a 32-ray "lidar" (closeness to obstacle edges and to the sector
          boundary) that captures the true polygon shapes, and the elapsed
-         fraction of the 3000 s episode budget (last entry: makes the time
-         limit part of the state, so a timeout can be treated as a failure).
+         fraction of the 3000 s episode budget (makes the time limit part of
+         the state, so a timeout can be treated as a failure), and a route
+         hint from ``atc_agent.routing``: geodesic (restricted-area-free)
+         distance to the goal, bearing to the next route point, detour ratio.
 aircraft the M_AC most threatening other aircraft, ranked by predicted miss
          distance over a 300 s horizon. Each token carries relative state, CPA
          (tcpa / dcpa) features, a learner-vs-scripted flag and the aircraft's
@@ -42,8 +44,10 @@ V_MAX = 8            # obstacle vertices (generator: 3..8)
 S_MAX = 40           # sector vertices (generator adds points until area is met)
 
 EGO_BASE = 20
-EGO_DIM = EGO_BASE + 2 * N_RAYS + 1
-TIME_IDX = EGO_DIM - 1   # elapsed fraction of the episode time budget
+N_ROUTE = 4
+TIME_IDX = EGO_BASE + 2 * N_RAYS          # elapsed fraction of the episode time budget
+ROUTE_IDX = TIME_IDX + 1                  # route hint (N_ROUTE entries)
+EGO_DIM = ROUTE_IDX + N_ROUTE
 EPISODE_TIME_S = 3000.0
 AC_DIM = 23
 OB_DIM = 15
@@ -92,6 +96,7 @@ def build_observations(s):
     ``s`` is a dict of numpy arrays for B ownships:
       own_lat, own_lon, own_hdg, own_tas, own_cas, own_seltrk, own_selspd  (B,)
       goal_lat, goal_lon, mode_ma, elapsed_s (episode clock, seconds)     (B,)
+      route_dist (geodesic NM), route_has (bool) (B,)  route_next (B, 2) NM frame
       center (B, 2)    sector (B, S_MAX, 2)
       obst (B, N_OBS, V_MAX, 2)  obst_valid (B, N_OBS)  obst_centroid (B, N_OBS, 2)
       obst_radius (B, N_OBS)
@@ -268,6 +273,13 @@ def build_observations(s):
     ego[:, EGO_BASE:EGO_BASE + N_RAYS] = 1.0 - lid_ob / RAY_RANGE_NM
     ego[:, EGO_BASE + N_RAYS:TIME_IDX] = 1.0 - lid_sec / RAY_RANGE_NM
     ego[:, TIME_IDX] = np.clip(s["elapsed_s"] / EPISODE_TIME_S, 0.0, 1.0)
+    nx, ny = s["route_next"][:, 0], s["route_next"][:, 1]
+    r_rel = np.radians(wrap180(np.degrees(np.arctan2(ny - oy, nx - ox)) - hdg))
+    euclid = np.hypot(gx - ox, gy - oy)
+    ego[:, ROUTE_IDX] = np.clip(s["route_dist"] / 50.0, 0.0, 5.0)
+    ego[:, ROUTE_IDX + 1] = np.cos(r_rel)
+    ego[:, ROUTE_IDX + 2] = np.sin(r_rel)
+    ego[:, ROUTE_IDX + 3] = np.where(s["route_has"], np.clip(s["route_dist"] / np.maximum(euclid, 1e-3) - 1.0, 0.0, 3.0), 0.0)
 
     obs = np.concatenate([
         ego,

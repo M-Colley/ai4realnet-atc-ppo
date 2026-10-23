@@ -215,6 +215,8 @@ def main():
                    help="safety constraint on avoidable violations only (excludes those present at spawn)")
     p.add_argument("--timeout-penalty", type=float, default=20.0,
                    help="penalty when the 3000 s budget runs out (terminal, not bootstrapped)")
+    p.add_argument("--geodesic-progress", type=int, default=1,
+                   help="progress potential on the restricted-area-free route length (0: straight line)")
     p.add_argument("--eval-every", type=float, default=10e6)
     p.add_argument("--eval-sa", type=int, default=200)
     p.add_argument("--eval-ma", type=int, default=20)
@@ -239,7 +241,7 @@ def main():
     sa_choices = parse_choices(args.sa_intruders)
     cfgs = [dict(sa_slots=args.sa_slots, ma_slots=args.ma_slots, sa_intruders=sa_choices,
                  action_frequency=args.action_frequency, seed=args.seed * 100_003 + 7919 * i,
-                 reward=dict(timeout=args.timeout_penalty))
+                 reward=dict(timeout=args.timeout_penalty, geodesic=float(args.geodesic_progress)))
             for i in range(args.workers)]
     print(f"starting {args.workers} BlueSky workers ...", flush=True)
     venv = BlueSkyBatchVecEnv(cfgs)

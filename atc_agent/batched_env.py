@@ -46,6 +46,7 @@ from atc_agent.features import (
 from atc_agent.geometry import (
     NM2KM, kwikqdrdist, latlon_to_nm, points_in_polygons, nearest_on_polygons,
 )
+from atc_agent.routing import ScenarioRoutes, route_query, GRID
 
 METRIC_KEYS = [
     "total_reward", "flight_time", "waypoint_reached",
@@ -68,6 +69,7 @@ DEFAULT_REWARD = dict(
     prox_sec=0.005, prox_sec_nm=3.0,    # soft buffer inside the sector edge
     pred_conflict=0.002,                # per second per predicted conflict within 120 s
     timeout=20.0,                       # goal not reached within the 3000 s budget (terminal, no bootstrap)
+    geodesic=1.0,                       # progress potential on the restricted-area-free route length (0: straight line)
     lam_intr=1.0, lam_ra=1.0, lam_sec=1.0,   # adaptive (Lagrangian) safety multipliers
 )
 
@@ -158,6 +160,9 @@ class BatchedCompetitionSim:
         self.ep_len = np.zeros(B, dtype=int)
         self.phi = np.zeros(B)
         self.spawn_viol = np.zeros((B, len(SPAWN_KEYS)))
+        self.routes = [None] * len(self.kinds)
+        self.route_grid = np.ones((len(self.kinds), 3))
+        self.route_D = np.zeros((B, GRID * GRID), dtype=np.float32)
         self.acc = {k: np.zeros(B) for k in ("dt", "prox_ac", "prox_obs", "prox_sec")}
 
         # slot tables
@@ -247,6 +252,8 @@ class BatchedCompetitionSim:
             for key, v in geo.items():
                 self.g[key][k] = v
             self._sector_halfplanes(k)
+            self.routes[k] = ScenarioRoutes({key: self.g[key][k] for key in geo})
+            self.route_grid[k] = self.routes[k].grid_params()
             self.shapely[k] = None
             self.ids[k] = [None] * self.A
             self.is_agent[k] = False
@@ -357,6 +364,10 @@ class BatchedCompetitionSim:
         # the official envs call _update_metrics(dt=0) at reset
         self._update_metrics(seats, 0.0)
         self.spawn_viol[seats] = np.stack([self.metrics[k][seats] for k in SPAWN_KEYS], axis=1)
+        for s in seats.tolist():
+            self.route_D[s] = self.routes[self.seat_slot[s]].node_dist(self._goal_nm(np.array([s]))[0])
+        if self.reward["geodesic"]:
+            self._geodesic_phi(seats)
 
     # ------------------------------------------------------------ metrics
     def _update_metrics(self, seats, dt):
@@ -424,8 +435,30 @@ class BatchedCompetitionSim:
             sd_s = np.where(ins, sd_s, -1.0)
             self.acc["prox_sec"][seats] += np.clip((r["prox_sec_nm"] - sd_s) / r["prox_sec_nm"], 0, 1) ** 2 * dt
             self.acc["dt"][seats] += dt
-        self.phi[seats] = -np.maximum(dg * 1852.0 - GOAL_MARGIN_KM * 1000.0, 0.0) / self.reward["v_ref"]
+        if not self.reward["geodesic"]:
+            self.phi[seats] = -np.maximum(dg * 1852.0 - GOAL_MARGIN_KM * 1000.0, 0.0) / self.reward["v_ref"]
         return seats[newly]
+
+    # ------------------------------------------------------------ routing
+    def _goal_nm(self, seats):
+        c = self.g["center"][self.seat_slot[seats]]
+        return np.stack(latlon_to_nm(self.goal[seats, 0], self.goal[seats, 1], c[:, 0], c[:, 1]), axis=1)
+
+    def _route(self, seats):
+        k = self.seat_slot[seats]
+        own = self.tidx[k, self.seat_pos[seats]]
+        c = self.g["center"][k]
+        px, py = latlon_to_nm(bs.traf.lat[own], bs.traf.lon[own], c[:, 0], c[:, 1])
+        gl = self._goal_nm(seats)
+        return route_query(px, py, gl[:, 0], gl[:, 1], self.route_grid[k], self.route_D[seats])
+
+    def _geodesic_phi(self, seats):
+        """Progress potential on the route length (replaces the straight-line one)."""
+        if len(seats) == 0:
+            return
+        geo, _, _ = self._route(seats)
+        phi = -np.maximum(geo * 1852.0 - GOAL_MARGIN_KM * 1000.0, 0.0) / self.reward["v_ref"]
+        self.phi[seats] = np.where(self.reached[seats], 0.0, phi)
 
     # -------------------------------------------------------- observation
     def _obs_inputs(self, seats):
@@ -460,6 +493,7 @@ class BatchedCompetitionSim:
             "oth_intent_lat": np.where(is_ag, self.ac_goal[k, :, 0], bs.traf.actwp.lat[ot]),
             "oth_intent_lon": np.where(is_ag, self.ac_goal[k, :, 1], bs.traf.actwp.lon[ot]),
         }
+        s["route_dist"], s["route_next"], s["route_has"] = self._route(seats)
         return s
 
     def _observe(self, seats):
@@ -506,6 +540,10 @@ class BatchedCompetitionSim:
                     for a, b in zip(kk, jj):
                         self.ids[a][b] = None
                     self._refresh_index()
+
+        if r["geodesic"]:     # reached MA aircraft have left the simulation: potential 0
+            self._geodesic_phi(np.flatnonzero(stepped & ~self.reached & (self.tidx[self.seat_slot, self.seat_pos] >= 0)))
+            self.phi[stepped & self.reached] = 0.0
 
         # truncation
         truncated = np.zeros(B, dtype=bool)

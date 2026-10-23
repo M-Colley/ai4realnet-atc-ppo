@@ -15,7 +15,8 @@ from bluesky_zoo.competition.competition import CompetitionZooEnv
 from atc_agent.actions import action_space, action_targets, apply_targets
 from atc_agent.features import build_observations, scenario_geometry, OBS_DIM
 from atc_agent.batched_env import DEFAULT_REWARD, GOAL_MARGIN_KM
-from atc_agent.geometry import kwikqdrdist
+from atc_agent.geometry import kwikqdrdist, latlon_to_nm
+from atc_agent.routing import ScenarioRoutes, route_query
 
 
 def traffic_obs_inputs(own, others, others_is_agent, others_goal, goal, geo, mode_ma, elapsed_s):
@@ -69,6 +70,20 @@ class _HooksMixin:
             self._geo_key = self.scenario
         return self._geo
 
+    def _route_inputs(self, s, goal):
+        """Route hint for one ownship (same computation as BatchedCompetitionSim._route)."""
+        geo = self._geometry()
+        if getattr(self, "_routes_key", None) is not self.scenario:
+            self._routes = ScenarioRoutes(geo)
+            self._routes_key = self.scenario
+        c = geo["center"]
+        gx, gy = latlon_to_nm(np.array([goal[0]], dtype=float), np.array([goal[1]], dtype=float), c[0], c[1])
+        px, py = latlon_to_nm(s["own_lat"], s["own_lon"], c[0], c[1])
+        D = self._routes.node_dist((gx[0], gy[0]))[None]
+        s["route_dist"], s["route_next"], s["route_has"] = route_query(
+            px, py, gx, gy, self._routes.grid_params()[None], D)
+        return s
+
     def _apply(self, ac_id, goal, action):
         i = bs.traf.id2idx(ac_id)
         hdg, cas = action_targets(np.asarray(action).reshape(1, 2),
@@ -110,6 +125,7 @@ class AgentCompetitionEnv(_HooksMixin, CompetitionEnv):
                                np.zeros((len(others), 2)), (self.goal_lat, self.goal_lon),
                                self._geometry(), mode_ma=0,
                                elapsed_s=self.metrics[ac_id]["flight_time"])
+        s = self._route_inputs(s, (self.goal_lat, self.goal_lon))
         return build_observations(s)[0][0]
 
     def _get_action(self, ac_id, action):
@@ -141,6 +157,7 @@ class AgentCompetitionZooEnv(_HooksMixin, CompetitionZooEnv):
         s = traffic_obs_inputs(bs.traf.id2idx(ac_id), idx, [True] * len(idx), goals,
                                self._goal[ac_id], self._geometry(), mode_ma=1,
                                elapsed_s=self.sim_time)
+        s = self._route_inputs(s, self._goal[ac_id])
         return build_observations(s)[0][0]
 
     def _get_action(self, ac_id, action):
