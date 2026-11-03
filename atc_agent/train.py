@@ -71,6 +71,9 @@ class CompetitionCallback(BaseCallback):
 
     def _on_training_start(self):
         self.t_start = self.num_timesteps
+        # count from where this run starts (a resumed model is already past 1e9 steps)
+        self.next_eval = self.t_start + self.a.eval_every
+        self.next_save = self.t_start + self.a.save_every
         self.training_env.set_reward_params(self.lam)
         self.jsonl = open(os.path.join(self.out, "progress.jsonl"), "a")
         if self.a.eval_every > 0:
