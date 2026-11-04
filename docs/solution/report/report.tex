@@ -5,6 +5,9 @@
 \usepackage{microtype,booktabs,graphicx,amsmath,xcolor,multirow,caption,xspace}
 \usepackage{enumitem}
 \setlist{nosep,leftmargin=*}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.7}
+\renewcommand{\textfraction}{0.1}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage{tikz}
@@ -228,7 +231,23 @@ time-aware control, which trained twice as long (230M vs 115M steps), the
 geodesic checkpoint has 17 fewer MA failures per 1000 scenarios [5, 31]; the
 control reaches 3 SA failures, so on an equal SA/MA weighting of
 $100\,g - 10\,v - 0.01\,t$ (goal, violations, flight time) the two tie
-($+0.02$ [$-0.22$, $+0.21$]).
+($+0.02$ [$-0.22$, $+0.21$]). The training curves (Fig.~\ref{fig:training})
+agree: violations fall five-fold in the first 0.1B steps, the rest of the
+main run mostly shortens flights and reduces timeouts, and in the fine-tunes
+MA timeouts keep falling under the geodesic potential but not in the control.
+
+\begin{figure}[!tb]
+\centering
+\includegraphics[width=\columnwidth]{figures/training.pdf}
+\caption{Training curves of the submitted lineage (solid) and the time-aware
+control (dashed): competition-configuration episodes of the training rollouts
+(stochastic policy), episode-weighted over 10M (left) and 5M (right) steps.
+Dotted: start of the geodesic stage. The multipliers sit at their cap of 8
+during the main run; the step at the geodesic start is because they continued
+from the time-aware run's last state (1.3B), its weights from its best
+checkpoint (1.07B).}
+\label{fig:training}
+\end{figure}
 
 \begin{table}[t]
 \centering\small

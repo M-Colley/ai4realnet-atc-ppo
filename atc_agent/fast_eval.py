@@ -167,6 +167,27 @@ class StickyDecoder:
         return a
 
 
+class EnsembleDecoder:
+    """Greedy decoding of a policy ensemble: per action head, the mean of the
+    members' action probabilities, then the argmax. A one-member ensemble is
+    exactly ``model.predict(..., deterministic=True)``."""
+
+    def __init__(self, models):
+        import torch as th
+        self.th, self.models = th, list(models)
+
+    def __call__(self, obs):
+        th = self.th
+        obs = np.asarray(obs, dtype=np.float32)
+        with th.no_grad():
+            probs = None
+            for m in self.models:
+                dists = m.policy.get_distribution(m.policy.obs_to_tensor(obs)[0]).distribution
+                p = [d.probs.cpu() for d in dists]
+                probs = p if probs is None else [a + b for a, b in zip(probs, p)]
+            return th.stack([th.argmax(p, dim=1) for p in probs], dim=1).numpy()
+
+
 ROWS = [
     ("Goal completion rate [%]", "waypoint_reached", 100.0),
     ("Flight time [s]", "flight_time", 1.0),
@@ -204,6 +225,8 @@ def main():
     p.add_argument("--bias-direct", type=float, default=0.0, help="StickyDecoder bonus on the direct heading bin")
     p.add_argument("--scenario-file", default=None,
                    help='pickle {"sa": [Scenario], "ma": [Scenario]} to evaluate instead of the seeded stream')
+    p.add_argument("--ensemble", nargs="+", default=None,
+                   help="further models whose action probabilities are averaged with --model's (EnsembleDecoder)")
     args = p.parse_args()
 
     from atc_agent.inference import load_model
@@ -213,8 +236,11 @@ def main():
         return model.predict(o, deterministic=not args.stochastic)[0]
 
     if args.sticky_side or args.sticky_speed or args.bias_top_speed or args.bias_direct:
-        assert not args.stochastic
+        assert not args.stochastic and not args.ensemble
         predict = StickyDecoder(model, args.sticky_side, args.sticky_speed, args.bias_top_speed, args.bias_direct)
+    if args.ensemble:
+        assert not args.stochastic
+        predict = EnsembleDecoder([model] + [load_model(m, device=args.device) for m in args.ensemble])
 
     n_sa = args.episodes if args.env in ("sa", "both") else 0
     n_ma = args.episodes if args.env in ("ma", "both") else 0

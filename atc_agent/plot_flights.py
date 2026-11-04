@@ -23,7 +23,7 @@ from atc_agent.features import scenario_geometry, latlon_to_nm  # noqa: E402
 
 def replay(predict, scens, kind, n_agents=10):
     """Fly ``scens`` together; return per scenario {'tracks': {j: (T, 2) NM}, 'agent': {j: bool},
-    'metrics': {j: dict}} with positions every decision."""
+    'metrics': {j: dict}, 'actions': {j: (n_decisions, 2)}} with positions every decision."""
     with contextlib.redirect_stdout(io.StringIO()):
         from atc_agent.batched_env import BatchedCompetitionSim
         sim = BatchedCompetitionSim(sa_slots=len(scens) if kind == "sa" else 0,
@@ -31,7 +31,7 @@ def replay(predict, scens, kind, n_agents=10):
                                     ma_agents=n_agents, respawn=False, auto_reset=False)
     sim.forced = {k: [s] for k, s in enumerate(scens)}
     obs = sim.reset()
-    out = [dict(tracks={}, agent={j: bool(sim.is_agent[k, j]) for j in range(sim.A)}, metrics={})
+    out = [dict(tracks={}, agent={j: bool(sim.is_agent[k, j]) for j in range(sim.A)}, metrics={}, actions={})
            for k in range(len(scens))]
     seat_of = {(int(sim.seat_slot[s]), int(sim.seat_pos[s])): s for s in range(sim.n_seats)}
 
@@ -51,6 +51,8 @@ def replay(predict, scens, kind, n_agents=10):
         idx = np.flatnonzero(sim.active)
         if len(idx):
             act[idx] = predict(obs[idx])
+        for s in idx:
+            out[sim.seat_slot[s]]["actions"].setdefault(int(sim.seat_pos[s]), []).append(act[s].copy())
         obs, _, _, _, infos = sim.step(act)
         for seat, info in infos.items():
             if live[seat]:
@@ -60,6 +62,7 @@ def replay(predict, scens, kind, n_agents=10):
         record()
     for o in out:
         o["tracks"] = {j: np.array(t) for j, t in o["tracks"].items()}
+        o["actions"] = {j: np.array(a) for j, a in o["actions"].items()}
     assert len(seat_of) == sim.n_seats
     return out
 
