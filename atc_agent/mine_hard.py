@@ -89,6 +89,34 @@ def load_pool(df):
     return pool
 
 
+def build_pool(mined, shallow, max_depth, sa_top_frac=0.05, v_kt=332.0):
+    """Replay pool from mine_hard outputs.
+
+    mined : DataFrame of mine_hard CSVs. SA: timeouts plus the ``sa_top_frac``
+        largest excesses over the route at ``v_kt``; MA: scenarios with a timeout.
+    shallow : list of MA Scenario from ``--shallow-only`` scans.
+    Scenarios with any goal >= ``max_depth`` inside a restricted area (reachable
+    only by entering it) are left out, so the pool never rewards an entry."""
+    m = mined.copy()
+    m["excess"] = m.flight_time - m.d_geo / v_kt * 3600.0
+    sa = m[m.kind == "sa"]
+    ok = sa[sa.waypoint_reached >= 1]
+    slow = ok[ok.excess >= ok.excess.quantile(1 - sa_top_frac)]
+    pick = pd.concat([sa[sa.waypoint_reached < 1], slow])[["seed", "kind", "scenario"]]
+    ma = m[(m.kind == "ma") & (m.waypoint_reached < 1)][["seed", "kind", "scenario"]]
+    pool = load_pool(pd.concat([pick, ma]).drop_duplicates())
+    meta = {}
+    for kind in ("sa", "ma"):
+        before = len(pool[kind])
+        pool[kind] = [s for s in pool[kind] if max(goal_depths(s)) < max_depth]
+        meta[f"{kind}_mined"] = len(pool[kind])
+        meta[f"{kind}_dropped_deep_goal"] = before - len(pool[kind])
+    pool["ma"] += list(shallow)
+    meta["ma_shallow"] = len(shallow)
+    pool["meta"] = meta
+    return pool
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", required=True)

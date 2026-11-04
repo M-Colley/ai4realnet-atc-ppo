@@ -202,6 +202,8 @@ def main():
     p.add_argument("--sticky-speed", type=float, default=0.0, help="StickyDecoder speed bonus (log-prob)")
     p.add_argument("--bias-top-speed", type=float, default=0.0, help="StickyDecoder bonus on the fastest speed bin")
     p.add_argument("--bias-direct", type=float, default=0.0, help="StickyDecoder bonus on the direct heading bin")
+    p.add_argument("--scenario-file", default=None,
+                   help='pickle {"sa": [Scenario], "ma": [Scenario]} to evaluate instead of the seeded stream')
     args = p.parse_args()
 
     from atc_agent.inference import load_model
@@ -216,7 +218,13 @@ def main():
 
     n_sa = args.episodes if args.env in ("sa", "both") else 0
     n_ma = args.episodes if args.env in ("ma", "both") else 0
-    ev = FastEvaluator.official(n_sa, n_ma, seed=args.seed)
+    if args.scenario_file:
+        import pickle
+        with open(args.scenario_file, "rb") as f:
+            sc = pickle.load(f)
+        ev = FastEvaluator(sc.get("sa", [])[:n_sa], sc.get("ma", [])[:n_ma])
+    else:
+        ev = FastEvaluator.official(n_sa, n_ma, seed=args.seed)
     recs = ev.run(predict, chunk=args.chunk)
     for kind, label in (("sa", "Single-agent"), ("ma", "Multi-agent")):
         if recs[kind]:
