@@ -33,8 +33,11 @@ its original cohort has finished (or the 3000 s clock runs out), so the dense
 simultaneous-start phase of the evaluation distribution is trained on as well.
 """
 
+import copy
+
 import numpy as np
 import bluesky as bs
+from bluesky.stack.stackbase import Stack
 from shapely.geometry import Polygon
 
 import bluesky_gym.envs.common.functions as fn
@@ -46,7 +49,7 @@ from atc_agent.features import (
 from atc_agent.geometry import (
     NM2KM, kwikqdrdist, latlon_to_nm, points_in_polygons, nearest_on_polygons,
 )
-from atc_agent.routing import ScenarioRoutes, route_query, GRID
+from atc_agent.routing import ScenarioRoutes, route_query, route_target, GRID
 
 METRIC_KEYS = [
     "total_reward", "flight_time", "waypoint_reached",
@@ -103,13 +106,20 @@ class BatchedCompetitionSim:
     n_obstacles : obstacles per scenario (competition: 5).
     action_frequency : sim seconds per decision.
     reward : overrides for DEFAULT_REWARD.
+    pool, pool_prob : prioritized replay. ``pool`` maps "sa"/"ma" to lists of
+        Scenario; a slot of that kind restarts from a uniformly drawn pool
+        scenario with probability ``pool_prob[kind]``, else from a fresh one.
     """
 
     def __init__(self, sa_slots=32, ma_slots=0, sa_intruders=((10, 1.0),),
                  ma_agents=10, ma_intruders=0, n_obstacles=5,
-                 action_frequency=10, reward=None, seed=0, respawn=True, auto_reset=True):
+                 action_frequency=10, reward=None, seed=0, respawn=True, auto_reset=True,
+                 pool=None, pool_prob=None):
         if bs.sim is None:
             bs.init(mode="sim", detached=True)
+        # BlueSky is a process singleton: drop commands a previous instance queued
+        # but never stepped (e.g. ADDWPT for intruders whose ids this instance reuses)
+        Stack.clear()
         bs.stack.stack("DT 1;FF")
         bs.stack.stack("RESO OFF")
         bs.traf.reset()
@@ -122,6 +132,8 @@ class BatchedCompetitionSim:
         self.reward = dict(DEFAULT_REWARD)
         if reward:
             self.reward.update(reward)
+        self.pool = {k: v for k, v in (pool or {}).items() if len(v)}
+        self.pool_prob = dict(pool_prob or {})
 
         self.sa_choices = np.array([n for n, _ in sa_intruders], dtype=int)
         p = np.array([q for _, q in sa_intruders], dtype=float)
@@ -166,6 +178,7 @@ class BatchedCompetitionSim:
         self.routes = [None] * len(self.kinds)
         self.route_grid = np.ones((len(self.kinds), 3))
         self.route_D = np.zeros((B, GRID * GRID), dtype=np.float32)
+        self.route_tgt = np.zeros((B, 2))       # point the route field aims at (= goal unless EDGE_TARGET)
         self.acc = {k: np.zeros(B) for k in ("dt", "prox_ac", "prox_obs", "prox_sec")}
 
         # slot tables
@@ -238,6 +251,9 @@ class BatchedCompetitionSim:
             kind = self.kinds[k]
             if self.forced.get(k):
                 scen = self.forced[k].pop(0)
+                nint = len(scen.intruder_routes)
+            elif self.pool_prob.get(kind, 0.0) > 0 and kind in self.pool and self.rng.random() < self.pool_prob[kind]:
+                scen = copy.deepcopy(self.pool[kind][self.rng.integers(len(self.pool[kind]))])
                 nint = len(scen.intruder_routes)
             elif kind == "sa":
                 nint = int(self.rng.choice(self.sa_choices, p=self.sa_probs))
@@ -369,7 +385,10 @@ class BatchedCompetitionSim:
         self._update_metrics(seats, 0.0)
         self.spawn_viol[seats] = np.stack([self.metrics[k][seats] for k in SPAWN_KEYS], axis=1)
         for s in seats.tolist():
-            self.route_D[s] = self.routes[self.seat_slot[s]].node_dist(self._goal_nm(np.array([s]))[0])
+            k = self.seat_slot[s]
+            geo = {key: self.g[key][k] for key in ("obst", "obst_valid", "sector")}
+            self.route_tgt[s] = route_target(self._goal_nm(np.array([s]))[0], geo)
+            self.route_D[s] = self.routes[k].node_dist(self.route_tgt[s])
         if self.reward["geodesic"]:
             self._geodesic_phi(seats)
 
@@ -453,7 +472,7 @@ class BatchedCompetitionSim:
         own = self.tidx[k, self.seat_pos[seats]]
         c = self.g["center"][k]
         px, py = latlon_to_nm(bs.traf.lat[own], bs.traf.lon[own], c[:, 0], c[:, 1])
-        gl = self._goal_nm(seats)
+        gl = self.route_tgt[seats]
         return route_query(px, py, gl[:, 0], gl[:, 1], self.route_grid[k], self.route_D[seats])
 
     def _geodesic_phi(self, seats):

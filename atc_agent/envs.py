@@ -16,7 +16,7 @@ from atc_agent.actions import action_space, action_targets, apply_targets
 from atc_agent.features import build_observations, scenario_geometry, OBS_DIM
 from atc_agent.batched_env import DEFAULT_REWARD, GOAL_MARGIN_KM
 from atc_agent.geometry import kwikqdrdist, latlon_to_nm
-from atc_agent.routing import ScenarioRoutes, route_query
+from atc_agent.routing import ScenarioRoutes, route_query, route_target
 
 
 def traffic_obs_inputs(own, others, others_is_agent, others_goal, goal, geo, mode_ma, elapsed_s):
@@ -79,9 +79,10 @@ class _HooksMixin:
         c = geo["center"]
         gx, gy = latlon_to_nm(np.array([goal[0]], dtype=float), np.array([goal[1]], dtype=float), c[0], c[1])
         px, py = latlon_to_nm(s["own_lat"], s["own_lon"], c[0], c[1])
-        D = self._routes.node_dist((gx[0], gy[0]))[None]
+        tx, ty = route_target((gx[0], gy[0]), geo)
+        D = self._routes.node_dist((tx, ty))[None]
         s["route_dist"], s["route_next"], s["route_has"] = route_query(
-            px, py, gx, gy, self._routes.grid_params()[None], D)
+            px, py, np.array([tx]), np.array([ty]), self._routes.grid_params()[None], D)
         return s
 
     def _apply(self, ac_id, goal, action):

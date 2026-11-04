@@ -51,6 +51,32 @@ def mine(predict, seed, n_sa, n_ma):
     return df[["seed", "kind", "scenario", "agent", "d_str", "d_geo"] + SCORED]
 
 
+def goal_depths(scen):
+    """Per agent: how deep [NM] its goal lies inside a restricted area (0 = outside)."""
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import unary_union
+    areas = unary_union([Polygon([latlon_to_nm(la, lo, *scen.center) for la, lo in ob.vertices])
+                         for ob in scen.obstacles])
+    out = []
+    for ag in scen.agents:
+        p = Point(latlon_to_nm(*ag.goal, *scen.center))
+        out.append(areas.boundary.distance(p) if areas.contains(p) else 0.0)
+    return out
+
+
+def shallow_goal_scenarios(seed, n_ma, max_depth):
+    """Geometry-only scan (no flying) of an official-protocol MA stream: scenarios
+    with a goal inside a restricted area but less than ``max_depth`` NM deep,
+    i.e. capturable from outside, and no deeper (entry-only) goal."""
+    ev = FastEvaluator.official(0, n_ma, seed=seed)
+    keep = []
+    for i, sc in enumerate(ev.ma):
+        d = np.array(goal_depths(sc))
+        if ((d > 0) & (d < max_depth)).any() and not (d >= max_depth).any():
+            keep.append((i, sc))
+    return keep
+
+
 def load_pool(df):
     """Regenerate the scenarios listed in ``df`` (columns seed, kind, scenario).
     Returns {"sa": [Scenario], "ma": [Scenario]}, one entry per distinct scenario."""
@@ -70,8 +96,21 @@ def main():
     p.add_argument("--n-sa", type=int, default=1000)
     p.add_argument("--n-ma", type=int, default=250)
     p.add_argument("--out", default="runs/mined")
+    p.add_argument("--shallow-only", action="store_true",
+                   help="no flying: pickle MA scenarios whose goal lies shallowly inside a restricted area")
     args = p.parse_args()
     assert args.seed not in RESERVED_SEEDS, "reserved evaluation seed"
+
+    if args.shallow_only:
+        import pickle
+        from atc_agent.routing import CAPTURE_NM, EDGE_OFFSET_NM
+        keep = shallow_goal_scenarios(args.seed, args.n_ma, CAPTURE_NM - EDGE_OFFSET_NM)
+        os.makedirs(args.out, exist_ok=True)
+        path = os.path.join(args.out, f"shallow_seed{args.seed}.pkl")
+        with open(path, "wb") as f:
+            pickle.dump({"seed": args.seed, "index": [i for i, _ in keep], "ma": [s for _, s in keep]}, f)
+        print(f"wrote {path}: {len(keep)} of {args.n_ma} MA scenarios")
+        return
 
     from atc_agent.inference import load_model
     model = load_model(args.model, device="cpu")

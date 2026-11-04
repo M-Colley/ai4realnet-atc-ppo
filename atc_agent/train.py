@@ -224,6 +224,10 @@ def main():
                    help="cost per 90 deg of a direct left<->right flip of the heading offset (0.01 = 1 s)")
     p.add_argument("--speed-jump-penalty", type=float, default=0.0,
                    help="cost per speed bin changed beyond one bin between decisions (0.01 = 1 s)")
+    p.add_argument("--pool", default=None,
+                   help='pickle {"sa": [Scenario], "ma": [Scenario]} for prioritized replay')
+    p.add_argument("--pool-prob-sa", type=float, default=0.0, help="SA restarts drawn from the pool")
+    p.add_argument("--pool-prob-ma", type=float, default=0.0, help="MA restarts drawn from the pool")
     p.add_argument("--eval-every", type=float, default=10e6)
     p.add_argument("--eval-sa", type=int, default=200)
     p.add_argument("--eval-ma", type=int, default=20)
@@ -238,18 +242,29 @@ def main():
 
     out = os.path.join("runs", args.run)
     os.makedirs(os.path.join(out, "checkpoints"), exist_ok=True)
+    from atc_agent import routing
     with open(os.path.join(out, "args.json"), "w") as f:
-        json.dump(vars(args), f, indent=2)
+        # the edge target changes observations: evaluate with the same ATC_EDGE_TARGET
+        json.dump({**vars(args), "edge_target": routing.EDGE_TARGET}, f, indent=2)
 
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
     # argument validation in torch.distributions forces GPU syncs in every minibatch (~15-25% of the update)
     th.distributions.Distribution.set_default_validate_args(False)
     sa_choices = parse_choices(args.sa_intruders)
+    pool = None
+    if args.pool:
+        import pickle
+        with open(args.pool, "rb") as f:
+            pool = pickle.load(f)
+        print(f"replay pool: {len(pool.get('sa', []))} SA, {len(pool.get('ma', []))} MA scenarios "
+              f"(p_sa {args.pool_prob_sa}, p_ma {args.pool_prob_ma})", flush=True)
     cfgs = [dict(sa_slots=args.sa_slots, ma_slots=args.ma_slots, sa_intruders=sa_choices,
                  action_frequency=args.action_frequency, seed=args.seed * 100_003 + 7919 * i,
                  reward=dict(timeout=args.timeout_penalty, geodesic=float(args.geodesic_progress),
-                             reversal=args.reversal_penalty, speed_jump=args.speed_jump_penalty))
+                             reversal=args.reversal_penalty, speed_jump=args.speed_jump_penalty),
+                 pool={k: pool[k] for k in ("sa", "ma") if k in pool} if pool else None,
+                 pool_prob=dict(sa=args.pool_prob_sa, ma=args.pool_prob_ma))
             for i in range(args.workers)]
     print(f"starting {args.workers} BlueSky workers ...", flush=True)
     venv = BlueSkyBatchVecEnv(cfgs)

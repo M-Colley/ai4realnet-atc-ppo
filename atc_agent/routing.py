@@ -14,17 +14,30 @@ area) and a crossing is only "chosen" when going around is much longer.
 Queries interpolate the field bilinearly, so the potential is continuous in
 the aircraft position; the route hint is the steepest-descent direction.
 All distances in NM, in the scenario's local (north, east) frame.
+
+Edge target (``ATC_EDGE_TARGET=1``, off by default): a few generated goals lie
+inside a restricted area. When the area's edge is within the 5 km capture
+radius, the field aims at the nearest point just outside that edge instead of
+the goal, so the hint leads to a capture without entering the area. Deeper
+goals, and all goals outside restricted areas, keep the goal as the target.
 """
+
+import os
 
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
+from shapely.geometry import Point, Polygon
+from shapely.ops import nearest_points, unary_union
 
 from atc_agent.geometry import points_in_polygons
 
 GRID = 96
 COST_INSIDE = 5.0
 MARGIN_NM = 10.0
+EDGE_TARGET = os.environ.get("ATC_EDGE_TARGET", "0") == "1"
+CAPTURE_NM = 5.0 / 1.852          # waypoint capture radius (fixed competition rule)
+EDGE_OFFSET_NM = 0.3              # how far outside the edge the substitute target sits
 _OFFS = [(di, dj) for di in range(-2, 3) for dj in range(-2, 3)
          if (di, dj) != (0, 0) and np.gcd(abs(di), abs(dj)) == 1]       # 16-connectivity
 
@@ -75,6 +88,26 @@ class ScenarioRoutes:
 
     def grid_params(self):
         return np.array([self.origin[0], self.origin[1], self.res])
+
+
+def route_target(goal, geo):
+    """Point the route field aims at (NM frame): ``goal``, or with EDGE_TARGET a
+    capturable point just outside the restricted area that contains it."""
+    goal = (float(goal[0]), float(goal[1]))
+    if not EDGE_TARGET:
+        return goal
+    areas = unary_union([Polygon(ob) for ob, ok in zip(geo["obst"], geo["obst_valid"]) if ok])
+    p = Point(goal)
+    if areas.is_empty or not areas.contains(p):
+        return goal
+    q = nearest_points(areas.boundary, p)[0]
+    depth = p.distance(q)
+    if depth + EDGE_OFFSET_NM >= CAPTURE_NM or depth == 0.0:
+        return goal
+    t = Point(q.x + (q.x - p.x) / depth * EDGE_OFFSET_NM, q.y + (q.y - p.y) / depth * EDGE_OFFSET_NM)
+    if areas.contains(t) or not Polygon(geo["sector"]).contains(t):
+        return goal
+    return (t.x, t.y)
 
 
 def route_query(px, py, gx, gy, grid, field):
