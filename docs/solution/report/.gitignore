@@ -1,0 +1,11 @@
+# LaTeX build products
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+build.log
+# previews (the paper uses the PDF figures)
+figures/*.png
