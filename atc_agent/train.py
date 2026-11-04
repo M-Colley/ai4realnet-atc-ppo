@@ -220,6 +220,10 @@ def main():
                    help="penalty when the 3000 s budget runs out (terminal, not bootstrapped)")
     p.add_argument("--geodesic-progress", type=int, default=1,
                    help="progress potential on the restricted-area-free route length (0: straight line)")
+    p.add_argument("--reversal-penalty", type=float, default=0.0,
+                   help="cost per 90 deg of a direct left<->right flip of the heading offset (0.01 = 1 s)")
+    p.add_argument("--speed-jump-penalty", type=float, default=0.0,
+                   help="cost per speed bin changed beyond one bin between decisions (0.01 = 1 s)")
     p.add_argument("--eval-every", type=float, default=10e6)
     p.add_argument("--eval-sa", type=int, default=200)
     p.add_argument("--eval-ma", type=int, default=20)
@@ -244,7 +248,8 @@ def main():
     sa_choices = parse_choices(args.sa_intruders)
     cfgs = [dict(sa_slots=args.sa_slots, ma_slots=args.ma_slots, sa_intruders=sa_choices,
                  action_frequency=args.action_frequency, seed=args.seed * 100_003 + 7919 * i,
-                 reward=dict(timeout=args.timeout_penalty, geodesic=float(args.geodesic_progress)))
+                 reward=dict(timeout=args.timeout_penalty, geodesic=float(args.geodesic_progress),
+                             reversal=args.reversal_penalty, speed_jump=args.speed_jump_penalty))
             for i in range(args.workers)]
     print(f"starting {args.workers} BlueSky workers ...", flush=True)
     venv = BlueSkyBatchVecEnv(cfgs)

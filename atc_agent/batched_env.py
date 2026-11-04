@@ -39,7 +39,7 @@ from shapely.geometry import Polygon
 
 import bluesky_gym.envs.common.functions as fn
 from core.scenario import ScenarioGenerator, _bearing_nm, _nm_to_latlon
-from atc_agent.actions import action_targets, apply_targets
+from atc_agent.actions import HEADING_OFFSETS, action_targets, apply_targets
 from atc_agent.features import (
     build_observations, scenario_geometry, N_OBS, OBS_DIM, SEP_NM,
 )
@@ -71,6 +71,8 @@ DEFAULT_REWARD = dict(
     timeout=20.0,                       # goal not reached within the 3000 s budget (terminal, no bootstrap)
     geodesic=1.0,                       # progress potential on the restricted-area-free route length (0: straight line)
     lam_intr=1.0, lam_ra=1.0, lam_sec=1.0,   # adaptive (Lagrangian) safety multipliers
+    reversal=0.0,       # per 90 deg of a direct left<->right flip of the heading offset (min of the two)
+    speed_jump=0.0,     # per speed bin changed beyond one bin between consecutive decisions
 )
 
 # violations already present when an aircraft spawns (the generator does not keep
@@ -159,6 +161,7 @@ class BatchedCompetitionSim:
         self.goal = np.zeros((B, 2))
         self.ep_len = np.zeros(B, dtype=int)
         self.phi = np.zeros(B)
+        self.prev_act = np.full((B, 2), -1, dtype=np.int64)    # previous decision (-1: none yet)
         self.spawn_viol = np.zeros((B, len(SPAWN_KEYS)))
         self.routes = [None] * len(self.kinds)
         self.route_grid = np.ones((len(self.kinds), 3))
@@ -359,6 +362,7 @@ class BatchedCompetitionSim:
         self.reached[seats] = False
         self.active[seats] = True
         self.ep_len[seats] = 0
+        self.prev_act[seats] = -1
         for v in self.acc.values():
             v[seats] = 0.0
         # the official envs call _update_metrics(dt=0) at reset
@@ -578,6 +582,18 @@ class BatchedCompetitionSim:
                - r["prox_obs"] * self.acc["prox_obs"]
                - r["prox_sec"] * self.acc["prox_sec"])
         rew -= r["timeout"] * timeout
+        # indecision costs: flipping the heading offset straight across the goal
+        # bearing, and jumping across speed bins (not potential-based: they break
+        # near-ties between equally good options, so keep them small)
+        a = np.asarray(actions)
+        had = stepped & (self.prev_act[:, 0] >= 0)
+        if r["reversal"] or r["speed_jump"]:
+            o_now = HEADING_OFFSETS[a[:, 0]]
+            o_prev = HEADING_OFFSETS[np.maximum(self.prev_act[:, 0], 0)]
+            rev = np.where(o_now * o_prev < 0, np.minimum(np.abs(o_now), np.abs(o_prev)) / 90.0, 0.0)
+            jump = np.maximum(np.abs(a[:, 1] - self.prev_act[:, 1]) - 1, 0)
+            rew -= np.where(had, r["reversal"] * rev + r["speed_jump"] * jump, 0.0)
+        self.prev_act[stepped] = a[stepped]
         rew = np.where(stepped, rew, 0.0)
 
         done = terminated | truncated

@@ -91,13 +91,16 @@ class FastEvaluator:
                                         ma_agents=self.n_agents, respawn=False, auto_reset=False)
         sim.forced = {k: [s] for k, s in enumerate(scens)}
         obs = sim.reset()
+        per_seat = getattr(predict, "per_seat", False)   # stateful decoders see seat ids
+        if per_seat:
+            predict.reset(sim.n_seats)
         out = {}
         live = np.ones(sim.n_seats, dtype=bool)
         while live.any():
             act = np.zeros((sim.n_seats, 2), dtype=np.int64)
             idx = np.flatnonzero(sim.active)
             if len(idx):
-                act[idx] = predict(obs[idx])
+                act[idx] = predict(obs[idx], idx) if per_seat else predict(obs[idx])
             obs, _, _, _, infos = sim.step(act)
             for seat, info in infos.items():
                 if live[seat]:
@@ -108,6 +111,50 @@ class FastEvaluator:
     def evaluate(self, predict, chunk=250):
         recs = self.run(predict, chunk)
         return {k: summarize(v) for k, v in recs.items()}
+
+
+class StickyDecoder:
+    """Greedy decoding with hysteresis, a diagnostic for indecision.
+
+    Adds ``side`` to the log-probability of every heading bin that does not
+    reverse the previous decision's side of the goal bearing (centre counts as
+    either side) and ``speed`` to every speed bin within one bin of the previous
+    speed, then takes the argmax. Both 0 is exactly ``model.predict(...,
+    deterministic=True)``; larger values only change decisions whose top-two
+    margin is smaller than the bonus."""
+
+    per_seat = True
+
+    def __init__(self, model, side=0.0, speed=0.0):
+        import torch as th
+        from atc_agent.actions import HEADING_OFFSETS, SPEED_TARGETS
+        self.th, self.model = th, model
+        sgn = np.sign(HEADING_OFFSETS)
+        self.keep_side = th.as_tensor(sgn[:, None] * sgn[None, :] >= 0)               # [prev, new]
+        sp = np.arange(len(SPEED_TARGETS))
+        self.keep_speed = th.as_tensor(np.abs(sp[:, None] - sp[None, :]) <= 1)
+        self.side, self.speed = float(side), float(speed)
+
+    def reset(self, n_seats):
+        self.prev = np.full((n_seats, 2), -1, dtype=np.int64)
+
+    def __call__(self, obs, seats):
+        th = self.th
+        policy = self.model.policy
+        with th.no_grad():
+            dists = policy.get_distribution(policy.obs_to_tensor(np.asarray(obs, dtype=np.float32))[0]).distribution
+            prev = th.as_tensor(self.prev[seats])
+            has = (prev[:, 0] >= 0).unsqueeze(1)
+            out = []
+            for d, keep, bonus, p in ((dists[0], self.keep_side, self.side, prev[:, 0]),
+                                      (dists[1], self.keep_speed, self.speed, prev[:, 1])):
+                w = d.probs.cpu()
+                if bonus:
+                    w = w * th.exp(bonus * (keep[p.clamp(min=0)] & has).to(w.dtype))
+                out.append(th.argmax(w, dim=1))     # same op as SB3's mode()
+        a = th.stack(out, dim=1).numpy()
+        self.prev[seats] = a
+        return a
 
 
 ROWS = [
@@ -141,6 +188,8 @@ def main():
     p.add_argument("--device", default="cpu")
     p.add_argument("--chunk", type=int, default=250)
     p.add_argument("--out", default=None, help="CSV prefix")
+    p.add_argument("--sticky-side", type=float, default=0.0, help="StickyDecoder heading-side bonus (log-prob)")
+    p.add_argument("--sticky-speed", type=float, default=0.0, help="StickyDecoder speed bonus (log-prob)")
     args = p.parse_args()
 
     from atc_agent.inference import load_model
@@ -148,6 +197,10 @@ def main():
 
     def predict(o):
         return model.predict(o, deterministic=not args.stochastic)[0]
+
+    if args.sticky_side or args.sticky_speed:
+        assert not args.stochastic
+        predict = StickyDecoder(model, args.sticky_side, args.sticky_speed)
 
     n_sa = args.episodes if args.env in ("sa", "both") else 0
     n_ma = args.episodes if args.env in ("ma", "both") else 0
