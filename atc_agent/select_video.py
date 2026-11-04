@@ -17,8 +17,9 @@ this order, each the eligible seed with the highest value not already picked:
 
 The picks are flown again in the official environment with our MDP wrapper (as
 scripts/evaluate_competition.py and scripts/record_competition_gifs.py do),
-rendered, captioned with the outcome of that official episode, and written as
-MP4 (ffmpeg) and GIF.
+rendered, captioned with the outcome of that official episode and with the
+stock environment's own fly-direct (zero action) violation counts, and written
+as MP4 (ffmpeg) and GIF.
 
     python -m atc_agent.select_video --model runs/ft_geo_r2/final.zip --out runs/video/ma
 """
@@ -91,6 +92,20 @@ def rollout(seed, act, max_steps=400):
     return frames, records
 
 
+def stock_fly_direct(seed):
+    """Violation counts of the stock environment's zero action (fly direct) on ``seed``."""
+    from bluesky_zoo.competition_v0 import CompetitionZooEnv
+    env = CompetitionZooEnv(n_agents=AGENTS)
+    env.reset(seed=seed)
+    recs = []
+    while env.agents:
+        _, _, term, trunc, infos = env.step({a: np.zeros(2, dtype=np.float32) for a in env.agents})
+        recs += [dict(infos[a]) for a in infos if term[a] or trunc[a]]
+    env.close()
+    r = pd.DataFrame(recs)
+    return int(r.intrusion_events.sum()), int(r.restricted_area_events.sum())
+
+
 def caption(frames, lines, bar=56):
     out = []
     font = ImageFont.load_default(size=18)
@@ -151,14 +166,14 @@ def main():
     for n, (name, seed) in enumerate(picks, 1):
         frames, recs = rollout(seed, act)
         r = pd.DataFrame(recs)
-        row = df[df.seed == seed].iloc[0]
+        fd_intr, fd_ra = stock_fly_direct(seed)
         lines = [f"Scenario {n}/5 (seed {seed}): {name}",
                  f"{int(r.waypoint_reached.sum())}/{len(r)} goals, {int(r[VIOL].sum().sum())} violations "
-                 f"(fly-direct: {int(row.fd_intrusions)} intrusions, {int(row.fd_ra)} RA)"]
+                 f"(fly-direct: {fd_intr} intrusions, {fd_ra} RA)"]
         reel += caption(frames, lines)
         meta.append(dict(scenario=n, seed=seed, criterion=name, goals=int(r.waypoint_reached.sum()), agents=len(r),
                          violations=int(r[VIOL].sum().sum()), mean_flight_time=float(r.flight_time.mean()),
-                         fd_intrusions=int(row.fd_intrusions), fd_ra=int(row.fd_ra), frames=len(frames)))
+                         fd_intrusions=fd_intr, fd_ra=fd_ra, frames=len(frames)))
         print(meta[-1], flush=True)
     with open(a.out + "_picks.json", "w") as f:
         json.dump(meta, f, indent=1)

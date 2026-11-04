@@ -231,7 +231,9 @@ time-aware control, which trained twice as long (230M vs 115M steps), the
 geodesic checkpoint has 17 fewer MA failures per 1000 scenarios [5, 31]; the
 control reaches 3 SA failures, so on an equal SA/MA weighting of
 $100\,g - 10\,v - 0.01\,t$ (goal, violations, flight time) the two tie
-($+0.02$ [$-0.22$, $+0.21$]). The training curves (Fig.~\ref{fig:training})
+($+0.02$ [$-0.22$, $+0.21$]). On an independent scenario stream (seed 777)
+the control again has more MA failures, $+26$ [11, 43] per 1000 scenarios,
+and here also a lower score ($-0.32$ [$-0.64$, $-0.03$]). The training curves (Fig.~\ref{fig:training})
 agree: violations fall five-fold in the first 0.1B steps, the rest of the
 main run mostly shortens flights and reduces timeouts, and in the fine-tunes
 MA timeouts keep falling under the geodesic potential but not in the control.
@@ -274,10 +276,10 @@ time-aware (1070M) & 9 & 78 & $-5$ [$-22$, $+11$]\\
 \section{Failure analysis}\label{sec:failures}
 \paragraph{SA violations are mostly unavoidable.} We replayed every violating
 episode exactly and branched each of the 102 actions 10--160\,s before the
-onset (a diagnostic; the controller stays the RL policy). Of 151 intrusions on
+onset (a diagnostic; the controller stays the RL policy). Of 141 intrusions on
 1000 fresh episodes, 116 exist at $t{=}0$ (the intruder spawns within 5\,NM); an
-escape was found for 18 of the other 35, and for 12/15 RA and 7/8 sector-exit
-events. \TODO{numbers from a 490M checkpoint; re-run on the final one}
+escape was found for 9 of the other 25, and for 14/18 RA and 4/6 sector-exit
+events (all 147 control replays reproduce the original metrics).
 
 \paragraph{Every failure is a timeout; half of the MA ones are goals inside
 RAs.} All failures exhaust the 3000\,s budget. Of 10{,}000 MA goals on seed~42,
@@ -315,17 +317,27 @@ far from RAs (congestion loops) & 32 & 196 & 2 & 64\\
 \end{tabular}
 \end{table}
 
-\paragraph{Remaining inefficiency is a tail.} Against each flight's geodesic
-route length at the policy's own 90th-percentile clear-path speed, the excess
-is 139\,s (SA) and 81\,s (MA) per flight, half of it from the slowest 10\%
-(loops near the start, waiting for traffic, long detours). These flights
-reverse turn side twice as often, but decoding with hysteresis does not help:
-only a weak bonus is neutral-to-positive ($+0.13$ selection score on seed~42,
-CI [0.00, 0.38], chosen on another seed) and strong commitment lengthens
-flights, so reversals are mostly purposeful steering. Biasing decoding towards
+\paragraph{Remaining inefficiency is a tail of wrong-side detours.} We
+replayed all 10{,}000 seed-42 MA flights (9{,}995 identical to the harness) and
+compared each successful one with the shortest route that never enters an RA
+(area-free grid path, string-pulled) at the policy's own top ground speed
+(322\,kt). The excess averages 54\,s per flight (median 16\,s). Half of it
+comes from the slowest 10\% of the flights whose straight line crosses an RA
+(5\% of all flights, $+518$\,s each, 86\% of it extra path, not slow flying).
+Two thirds of these pass an area on the other side than the shortest route
+(6\% of the other crossing flights), a quarter loop, and they reverse turn side
+($\geq$22$^\circ$) 40 times per flight against 18. Decoding with hysteresis
+does not fix this: only a weak bonus is neutral-to-positive ($+0.13$ selection
+score on seed~42, CI [0.00, 0.38], chosen on another seed) and strong
+commitment lengthens flights. A fine-tune with a small reversal cost is
+queued \TODO{results}. Biasing decoding towards
 top speed and the direct heading raises MA violations by 45\% without fewer
 failures: the learned trade-off is not over-cautious. Uniform weight averaging
 of the last three checkpoints~\citep{wortsman2022soups} changes nothing.
+Combining the geodesic checkpoint with the 1300M control, by averaging their
+weights or their action probabilities, adds 14 [1, 29] and 19 [5, 36] MA
+failures per 1000 scenarios on seed~42: the control dilutes what the geodesic
+stage learned.
 
 \section{Limitations}
 One training seed per configuration: paired tests control for scenario noise,

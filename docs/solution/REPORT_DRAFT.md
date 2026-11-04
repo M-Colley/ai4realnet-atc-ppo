@@ -185,9 +185,9 @@ steps), the geodesic checkpoint has 17 fewer MA failures per 1000 scenarios
 
 **Single-agent violations are mostly unavoidable.**
 - We replayed every violating episode exactly and branched each of the 102 actions 10–160 s before the violation's onset (a diagnostic only; the controller stays the RL policy).
-- Of 151 intrusions on 1000 fresh episodes, **116 exist at t = 0**: the intruder spawns within 5 NM.
-- Of the 35 later ones, an escape was found for 18. The same search finds escapes for 12/15 restricted-area and 7/8 sector-exit events.
-- TODO(final): these numbers are for a 490M checkpoint; re-run on the final one.
+- Of 141 intrusions on 1000 fresh episodes (1185M policy, seed 777), **116 exist at t = 0**: the intruder spawns within 5 NM.
+- Of the 25 later ones, an escape was found for 9. The same search finds escapes for 14/18 restricted-area and 4/6 sector-exit events.
+- All 147 control replays reproduce the original metrics exactly.
 
 **Every failure is a timeout; half of the multi-agent ones are infeasible goals.**
 - All 4 single-agent and 62 multi-agent failures run out of the 3000 s budget.

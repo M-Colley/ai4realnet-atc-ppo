@@ -9,14 +9,18 @@ time above the route bound (route length at the policy's own top ground speed
     path  = (flown length - route length) / v_top
     speed = flight time - flown length / v_top     (slow flying, turns, acceleration)
 
-where the route is the steepest descent of the same cost-to-go field as the
-policy's route hint (atc_agent.routing), ending at the 5 km capture radius.
-Each flight is also tagged with
+where the route is the shortest path that never enters a restricted area: the
+least-cost path on the route grid (atc_agent.routing) restricted to area-free
+edges, string-pulled, ending at the 5 km capture radius. Each flight is also
+tagged with
 
 * other_side: it passes some restricted area on the other side than the route
   (non-zero winding number of flown path + reversed route around the area),
-* side_flips: changes of the heading offset's sign (zero offsets skipped),
-* turn_deg: total absolute turning of the ground track,
+* loop: the ground track crosses itself,
+* side_flips: changes of the heading offset's sign (zero offsets skipped; also
+  counted for offsets of at least 22 deg only),
+* turn_deg / net_turn_deg: total absolute / net turning of the ground track,
+* hint_depth_nm: how deep the route-hint field's own least-cost path enters an area,
 * traffic: decisions with another aircraft within 10 NM,
 * top_speed: share of decisions at the fastest speed bin.
 
@@ -156,6 +160,8 @@ def analyse(scens, results):
                 flown_nm=float(seg.sum()), gs_kt_p99=float(np.quantile(seg / DT * 3600, 0.99)) if len(seg) else np.nan,
                 other_side=other, side_flips=int(np.sum(s[1:] != s[:-1])), side_flips_22=int(np.sum(s22[1:] != s22[:-1])),
                 turn_deg=float(np.degrees(np.abs(np.diff(hdg)).sum())),
+                net_turn_deg=float(np.degrees(abs(hdg[-1] - hdg[0]))),
+                loop=len(track) > 3 and not LineString(track).is_simple,
                 traffic=int(near), top_speed=float(np.mean(res["actions"][j][:, 1] == len(SPEED_TARGETS) - 1)),
                 n_decisions=len(off)))
     return pd.DataFrame(rows)
@@ -176,27 +182,23 @@ def summarise(df, v_top_kt):
     groups["clear of RA"] = ok[~ok.crosses_ra]
     lines = [f"v_top = {v_top_kt:.1f} kt (median over agents of each one's 99th-percentile 10 s ground speed); "
              f"{len(ok)} of {len(df)} agents reached the goal; {len(cr)} of them have a straight line crossing an RA.", "",
-             "| Group | n | excess [s] mean | path [s] | speed [s] | share of all excess | other side [%] | side flips (all / >=22 deg) | turn [deg] | traffic decisions | top-speed share |",
-             "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+             "| Group | n | excess [s] mean | path [s] | speed [s] | share of all excess | other side [%] | loop [%] | "
+             "side flips (all / >=22 deg) | turn total / net [deg] | traffic decisions | top-speed share |",
+             "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     tot = ok.excess_s.sum()
     for name, g in groups.items():
         lines.append(f"| {name} | {len(g)} | {g.excess_s.mean():.0f} | {g.path_s.mean():.0f} | {g.speed_s.mean():.0f} | "
-                     f"{g.excess_s.sum() / tot:.2f} | {100 * g.other_side.mean():.0f} | {g.side_flips.mean():.1f} / "
-                     f"{g.side_flips_22.mean():.1f} | {g.turn_deg.mean():.0f} | {g.traffic.mean():.1f} | {g.top_speed.mean():.2f} |")
+                     f"{g.excess_s.sum() / tot:.2f} | {100 * g.other_side.mean():.0f} | {100 * g.loop.mean():.0f} | "
+                     f"{g.side_flips.mean():.1f} / {g.side_flips_22.mean():.1f} | {g.turn_deg.mean():.0f} / "
+                     f"{g.net_turn_deg.mean():.0f} | {g.traffic.mean():.1f} | {g.top_speed.mean():.2f} |")
     tail = groups["crosses RA, slowest 10%"]
-    lines += ["", "Slowest 10% of RA-crossing flights, by dominant cause (each flight assigned once, in this order):"]
-    loops = tail.turn_deg > 540
-    other = tail.other_side.astype(bool)
-    causes = {
-        "loops / circling (turn > 540 deg)": loops,
-        "other side than the shortest route, no loops": ~loops & other,
-        "slow (speed part > path part)": ~loops & ~other & (tail.speed_s > tail.path_s),
-        "longer path on the shortest route's side": ~loops & ~other & (tail.speed_s <= tail.path_s),
-    }
-    for name, m in causes.items():
-        lines.append(f"- {name}: {int(m.sum())} flights, {tail.excess_s[m].sum() / tail.excess_s.sum():.2f} of the tail's excess")
-    lines += ["", f"Tail cross-tab: loops & other side {int((loops & other).sum())}, loops only {int((loops & ~other).sum())}, "
-              f"other side only {int((~loops & other).sum())}, neither {int((~loops & ~other).sum())}."]
+    other, loop = tail.other_side.astype(bool), tail.loop.astype(bool)
+    lines += ["", "Slowest 10% of RA-crossing flights: flights (share of the tail's excess)", "",
+              "| | loop | no loop |", "| --- | ---: | ---: |"]
+    for name, o in (("other side than the shortest route", other), ("same side", ~other)):
+        cells = [f"{int((o & l).sum())} ({tail.excess_s[o & l].sum() / tail.excess_s.sum():.2f})" for l in (loop, ~loop)]
+        lines.append(f"| {name} | {cells[0]} | {cells[1]} |")
+    lines.append(f"\nSpeed part larger than path part: {int((tail.speed_s > tail.path_s).sum())} tail flights.")
     return ok, "\n".join(lines)
 
 
