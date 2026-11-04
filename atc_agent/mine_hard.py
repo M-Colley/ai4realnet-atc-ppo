@@ -89,28 +89,32 @@ def load_pool(df):
     return pool
 
 
-def build_pool(mined, shallow, max_depth, sa_top_frac=0.05, v_kt=332.0):
+def build_pool(mined, shallow, max_depth, sa_top_frac=0.05, v_kt=332.0, sa_timeout_weight=1, ma_timeout_weight=1):
     """Replay pool from mine_hard outputs.
 
     mined : DataFrame of mine_hard CSVs. SA: timeouts plus the ``sa_top_frac``
         largest excesses over the route at ``v_kt``; MA: scenarios with a timeout.
     shallow : list of MA Scenario from ``--shallow-only`` scans.
-    Scenarios with any goal >= ``max_depth`` inside a restricted area (reachable
-    only by entering it) are left out, so the pool never rewards an entry."""
+    Timeout scenarios are repeated ``*_timeout_weight`` times (uniform sampling
+    from the pool then weights them accordingly). Scenarios with any goal >=
+    ``max_depth`` inside a restricted area (reachable only by entering it) are
+    left out, so the pool never rewards an entry."""
     m = mined.copy()
     m["excess"] = m.flight_time - m.d_geo / v_kt * 3600.0
     sa = m[m.kind == "sa"]
     ok = sa[sa.waypoint_reached >= 1]
-    slow = ok[ok.excess >= ok.excess.quantile(1 - sa_top_frac)]
-    pick = pd.concat([sa[sa.waypoint_reached < 1], slow])[["seed", "kind", "scenario"]]
-    ma = m[(m.kind == "ma") & (m.waypoint_reached < 1)][["seed", "kind", "scenario"]]
-    pool = load_pool(pd.concat([pick, ma]).drop_duplicates())
-    meta = {}
-    for kind in ("sa", "ma"):
-        before = len(pool[kind])
-        pool[kind] = [s for s in pool[kind] if max(goal_depths(s)) < max_depth]
-        meta[f"{kind}_mined"] = len(pool[kind])
-        meta[f"{kind}_dropped_deep_goal"] = before - len(pool[kind])
+    parts = {"sa_timeout": (sa[sa.waypoint_reached < 1], sa_timeout_weight),
+             "sa_slow": (ok[ok.excess >= ok.excess.quantile(1 - sa_top_frac)], 1),
+             "ma_timeout": (m[(m.kind == "ma") & (m.waypoint_reached < 1)], ma_timeout_weight)}
+    pool, meta = {"sa": [], "ma": []}, {}
+    for name, (part, weight) in parts.items():
+        kind = name[:2]
+        scens = load_pool(part[["seed", "kind", "scenario"]].drop_duplicates())[kind]
+        keep = [s for s in scens if max(goal_depths(s)) < max_depth]
+        meta[name] = len(keep)
+        meta[name + "_dropped_deep_goal"] = len(scens) - len(keep)
+        meta[name + "_weight"] = weight
+        pool[kind] += keep * weight
     pool["ma"] += list(shallow)
     meta["ma_shallow"] = len(shallow)
     pool["meta"] = meta
