@@ -42,7 +42,7 @@ modes. (iv)~Constrained PPO with adaptive safety multipliers on
 \emph{avoidable} violations only, a time-aware observation with timeouts as
 failures, and a geodesic progress potential around restricted areas. On the
 official seed-42 protocol the policy completes 99.37\% of multi-agent flights
-with 0.023 safety events per aircraft (fly-direct: \TODO{MA baseline}) and
+with 0.023 safety events per aircraft (fly-direct: 1.68) and
 99.6\% of single-agent flights with 0.148 events per episode (fly-direct:
 1.94). A failure analysis shows that most remaining single-agent intrusions
 exist at spawn and that half of the multi-agent failures have their goal
@@ -203,14 +203,14 @@ action. \TODO{final checkpoint}}
 \cmidrule(lr){2-3}\cmidrule(l){4-5}
 Metric & fly-direct & ours & fly-direct & ours\\
 \midrule
-Goal completion [\%] & 100.0 & 99.6 & \TODO{} & 99.37\\
-Flight time [s] & 852.0 & 987.6 & \TODO{} & 921.4\\
-Intrusion events & 1.127 & 0.127 & \TODO{} & 0.010\\
-Intrusion time [s] & 96.3 & 5.14 & \TODO{} & 0.36\\
-RA events & 0.813 & 0.013 & \TODO{} & 0.008\\
-RA time [s] & 129.9 & 0.74 & \TODO{} & 0.51\\
-Sector-exit events & 0.000 & 0.008 & \TODO{} & 0.005\\
-Time outside sector [s] & 0.0 & 0.64 & \TODO{} & 0.21\\
+Goal completion [\%] & 100.0 & 99.6 & 100.0 & 99.37\\
+Flight time [s] & 852.0 & 987.6 & 847.7 & 921.4\\
+Intrusion events & 1.127 & 0.127 & 0.877 & 0.010\\
+Intrusion time [s] & 96.3 & 5.14 & 64.8 & 0.36\\
+RA events & 0.813 & 0.013 & 0.799 & 0.008\\
+RA time [s] & 129.9 & 0.74 & 121.7 & 0.51\\
+Sector-exit events & 0.000 & 0.008 & 0.000 & 0.005\\
+Time outside sector [s] & 0.0 & 0.64 & 0.0 & 0.21\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -223,7 +223,12 @@ steps without any change (Table~\ref{tab:stages}). Only the geodesic stage
 reduces MA failures significantly, and its effect grew monotonically during the
 fine-tune (82$\to$72$\to$63$\to$62 failures at 1087M, 1165M, 1177M, 1185M)
 while safety events stayed at 0.022--0.025 per aircraft. SA failures
-(8$\to$4) are not significantly different ($p{=}0.29$).
+(8$\to$4) are not significantly different ($p{=}0.29$). Against the
+time-aware control, which trained twice as long (230M vs 115M steps), the
+geodesic checkpoint has 17 fewer MA failures per 1000 scenarios [5, 31]; the
+control reaches 3 SA failures, so on an equal SA/MA weighting of
+$100\,g - 10\,v - 0.01\,t$ (goal, violations, flight time) the two tie
+($+0.02$ [$-0.22$, $+0.21$]).
 
 \begin{table}[t]
 \centering\small
@@ -241,7 +246,7 @@ main (950M, selected) & 8 & 83 & ---\\
 \quad +300M steps, no change & 9 & 88 & $+5$ [$-8$, $+19$]\\
 \quad +avoidable-only constraint & 5 & 75 & $-8$ [$-21$, $+4$]\\
 time-aware (1070M) & 9 & 78 & $-5$ [$-22$, $+11$]\\
-\quad +230M steps, no change & \TODO{} & \TODO{} & \TODO{}\\
+\quad +230M steps, no change & 3 & 79 & $-4$ [$-21$, $+12$]\\
 \textbf{geodesic (1185M)} & \textbf{4} & \textbf{62} & $\mathbf{-21}$ [$-41$, $-5$]\\
 \bottomrule
 \end{tabular}

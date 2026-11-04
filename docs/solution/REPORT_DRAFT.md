@@ -23,7 +23,7 @@ a time-aware observation with timeouts treated as failures, and a
 **geodesic progress potential** around restricted areas.
 
 On the official seed-42 protocol the policy completes 99.37% of multi-agent
-flights with 0.023 safety events per aircraft, against TODO for a fly-direct
+flights with 0.023 safety events per aircraft, against 1.68 for a fly-direct
 baseline. It completes 99.6% of single-agent flights with 0.148 events per
 episode (1.94 for fly-direct). A failure analysis shows that most remaining
 single-agent intrusions exist at spawn, and that about half of the multi-agent
@@ -145,14 +145,14 @@ reporting seed).
 
 | Metric | SA fly-direct | SA ours | MA fly-direct | MA ours |
 | --- | ---: | ---: | ---: | ---: |
-| Goal completion rate [%] | 100.0 | 99.6 | TODO | 99.37 |
-| Flight time [s] | 852.0 | 987.6 | TODO | 921.4 |
-| Intrusion events | 1.127 | 0.127 | TODO | 0.010 |
-| Intrusion time [s] | 96.3 | 5.14 | TODO | 0.36 |
-| Restricted-area events | 0.813 | 0.013 | TODO | 0.008 |
-| Restricted-area time [s] | 129.9 | 0.74 | TODO | 0.51 |
-| Sector-exit events | 0.000 | 0.008 | TODO | 0.005 |
-| Time outside sector [s] | 0.0 | 0.64 | TODO | 0.21 |
+| Goal completion rate [%] | 100.0 | 99.6 | 100.0 | 99.37 |
+| Flight time [s] | 852.0 | 987.6 | 847.7 | 921.4 |
+| Intrusion events | 1.127 | 0.127 | 0.877 | 0.010 |
+| Intrusion time [s] | 96.3 | 5.14 | 64.8 | 0.36 |
+| Restricted-area events | 0.813 | 0.013 | 0.799 | 0.008 |
+| Restricted-area time [s] | 129.9 | 0.74 | 121.7 | 0.51 |
+| Sector-exit events | 0.000 | 0.008 | 0.000 | 0.005 |
+| Time outside sector [s] | 0.0 | 0.64 | 0.0 | 0.21 |
 
 Fly-direct is the stock env with the zero action (the harness default). The
 multi-agent figures are per agent-episode, over 10,000 agent-episodes.
@@ -169,13 +169,17 @@ multi-agent figures are per agent-episode, over 10,000 agent-episodes.
 | + 300M steps, no change (control) | 9 | 88 | +5 [−8, +19] |
 | + avoidable-only constraint | 5 | 75 | −8 [−21, +4] |
 | time-aware (1070M) | 9 | 78 | −5 [−22, +11] |
-| time-aware, +230M steps (control) | TODO | TODO | TODO |
+| time-aware, +230M steps (control) | 3 | 79 | −4 [−21, +12] |
 | **geodesic (1185M)** | **4** | **62** | **−21 [−41, −5]** |
 
 Only the geodesic stage reduces multi-agent failures significantly. Its effect
 grew monotonically over the fine-tune: 82 → 72 → 63 → 62 failures at 1087M,
 1165M, 1177M and 1185M. Safety events were unchanged throughout (0.022–0.025
 per agent). Single-agent changes are not significant: 8 → 4, McNemar p = 0.29.
+Against the time-aware control, which trained twice as long (230M vs 115M
+steps), the geodesic checkpoint has 17 fewer MA failures per 1000 scenarios
+[5, 31]. The control reaches 3 SA failures, so on an equal SA/MA weighting of
+100·goal − 10·violations − 0.01·flight time the two tie: +0.02 [−0.22, +0.21].
 
 ## 6. Failure analysis
 
