@@ -121,19 +121,27 @@ class StickyDecoder:
     either side) and ``speed`` to every speed bin within one bin of the previous
     speed, then takes the argmax. Both 0 is exactly ``model.predict(...,
     deterministic=True)``; larger values only change decisions whose top-two
-    margin is smaller than the bonus."""
+    margin is smaller than the bonus.
+
+    ``top_speed`` / ``direct`` add a static bonus to the fastest speed bin / the
+    direct-to-goal heading bin: a diagnostic for over-caution (if pushing the
+    policy faster and straighter raises the score, its trade-off between flight
+    time and separation is more conservative than the score's)."""
 
     per_seat = True
 
-    def __init__(self, model, side=0.0, speed=0.0):
+    def __init__(self, model, side=0.0, speed=0.0, top_speed=0.0, direct=0.0):
         import torch as th
-        from atc_agent.actions import HEADING_OFFSETS, SPEED_TARGETS
+        from atc_agent.actions import HEADING_OFFSETS, SPEED_TARGETS, DIRECT_BIN
         self.th, self.model = th, model
         sgn = np.sign(HEADING_OFFSETS)
         self.keep_side = th.as_tensor(sgn[:, None] * sgn[None, :] >= 0)               # [prev, new]
         sp = np.arange(len(SPEED_TARGETS))
         self.keep_speed = th.as_tensor(np.abs(sp[:, None] - sp[None, :]) <= 1)
         self.side, self.speed = float(side), float(speed)
+        self.static = [th.zeros(len(HEADING_OFFSETS)), th.zeros(len(SPEED_TARGETS))]
+        self.static[0][DIRECT_BIN] = float(direct)
+        self.static[1][-1] = float(top_speed)
 
     def reset(self, n_seats):
         self.prev = np.full((n_seats, 2), -1, dtype=np.int64)
@@ -146,11 +154,13 @@ class StickyDecoder:
             prev = th.as_tensor(self.prev[seats])
             has = (prev[:, 0] >= 0).unsqueeze(1)
             out = []
-            for d, keep, bonus, p in ((dists[0], self.keep_side, self.side, prev[:, 0]),
-                                      (dists[1], self.keep_speed, self.speed, prev[:, 1])):
+            for d, keep, bonus, p, st in ((dists[0], self.keep_side, self.side, prev[:, 0], self.static[0]),
+                                          (dists[1], self.keep_speed, self.speed, prev[:, 1], self.static[1])):
                 w = d.probs.cpu()
                 if bonus:
                     w = w * th.exp(bonus * (keep[p.clamp(min=0)] & has).to(w.dtype))
+                if st.any():
+                    w = w * th.exp(st).to(w.dtype)
                 out.append(th.argmax(w, dim=1))     # same op as SB3's mode()
         a = th.stack(out, dim=1).numpy()
         self.prev[seats] = a
@@ -190,6 +200,8 @@ def main():
     p.add_argument("--out", default=None, help="CSV prefix")
     p.add_argument("--sticky-side", type=float, default=0.0, help="StickyDecoder heading-side bonus (log-prob)")
     p.add_argument("--sticky-speed", type=float, default=0.0, help="StickyDecoder speed bonus (log-prob)")
+    p.add_argument("--bias-top-speed", type=float, default=0.0, help="StickyDecoder bonus on the fastest speed bin")
+    p.add_argument("--bias-direct", type=float, default=0.0, help="StickyDecoder bonus on the direct heading bin")
     args = p.parse_args()
 
     from atc_agent.inference import load_model
@@ -198,9 +210,9 @@ def main():
     def predict(o):
         return model.predict(o, deterministic=not args.stochastic)[0]
 
-    if args.sticky_side or args.sticky_speed:
+    if args.sticky_side or args.sticky_speed or args.bias_top_speed or args.bias_direct:
         assert not args.stochastic
-        predict = StickyDecoder(model, args.sticky_side, args.sticky_speed)
+        predict = StickyDecoder(model, args.sticky_side, args.sticky_speed, args.bias_top_speed, args.bias_direct)
 
     n_sa = args.episodes if args.env in ("sa", "both") else 0
     n_ma = args.episodes if args.env in ("ma", "both") else 0
