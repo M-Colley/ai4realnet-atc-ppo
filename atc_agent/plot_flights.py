@@ -64,10 +64,10 @@ def replay(predict, scens, kind, n_agents=10):
     return out
 
 
-def plot(scens, results, titles, path, ncols=4):
+def plot(scens, results, titles, path, ncols=4, size=4.2, legend=True):
     n = len(scens)
     nrows = int(np.ceil(n / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 4.2 * nrows), squeeze=False)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(size * ncols, size * nrows), squeeze=False)
     for ax in axes.flat[n:]:
         ax.axis("off")
     for ax, sc, res, title in zip(axes.flat, scens, results, titles):
@@ -86,7 +86,8 @@ def plot(scens, results, titles, path, ncols=4):
             m = res["metrics"].get(j, {})
             failed = m.get("waypoint_reached", 1) < 1
             ax.scatter(tr[:, 1], tr[:, 0], c=np.arange(len(tr)), cmap="viridis", s=3, zorder=3)
-            ax.plot(tr[:, 1], tr[:, 0], color="black" if failed else "tab:blue", lw=1.4 if failed else 0.5, zorder=2)
+            ax.plot(tr[:, 1], tr[:, 0], color="tab:red" if failed else "tab:blue", lw=1.2 if failed else 0.5,
+                    zorder=5 if failed else 2)
             ax.plot(tr[0, 1], tr[0, 0], "k^", ms=5, zorder=4)
             g = latlon_to_nm(*sc.agents[j].goal, *sc.center)
             ax.add_patch(plt.Circle((g[1], g[0]), GOAL_MARGIN_KM / 1.852, fill=False,
@@ -94,8 +95,10 @@ def plot(scens, results, titles, path, ncols=4):
         ax.set_aspect("equal")
         ax.set_title(title, fontsize=8)
         ax.tick_params(labelsize=6)
-    fig.suptitle("east [NM] vs north [NM]; own path dots coloured by time (dark = early); "
-                 "grey = other traffic; red = restricted areas; circle = goal; black = timeout", fontsize=9)
+    if legend:
+        fig.suptitle("east [NM] vs north [NM]; own path dots coloured by time (dark = early); "
+                     "grey = other traffic; shaded = restricted areas; circle = goal; red path / black circle = timeout",
+                     fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=110)
 
