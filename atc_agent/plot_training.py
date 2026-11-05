@@ -7,7 +7,8 @@ Metrics are those of the training rollouts' competition-configuration episodes
 episode-weighted means over a sliding window of training steps. The x axis is
 broken at 1.0B steps: the right panels show the fine-tunes at a finer scale.
 
-    python -m atc_agent.plot_training --out docs/solution/report/figures/training.pdf
+    python -m atc_agent.plot_training --main-run ../ai4realnet-atc-competition/runs/main \
+        --out docs/solution/report/figures/training.pdf
 """
 
 import argparse
@@ -18,9 +19,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-MAIN_RUN = r"C:\Users\localadmin\Desktop\ai4realnet-atc-competition\runs\main"
 # (run dir, first step kept, last step kept); steps are global across resumes
-LINEAGE = [(MAIN_RUN, 0, 1.0005e9), ("runs/ft_ta", 1.0e9, 1.0705e9), ("runs/ft_geo", 1.07e9, 1.135e9),
+LINEAGE = [("runs/main", 0, 1.0005e9), ("runs/ft_ta", 1.0e9, 1.0705e9), ("runs/ft_geo", 1.07e9, 1.135e9),
            ("runs/ft_geo_r", 1.135e9, 1.1675e9), ("runs/ft_geo_r2", 1.1673e9, 1.19e9)]
 CONTROL = [("runs/ft_ta", 1.0703e9, 1.31e9)]
 SPLIT, GEO_START = 1.0e9, 1.0704e9
@@ -59,7 +59,9 @@ def windowed(rows, key, window):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", required=True)
+    p.add_argument("--main-run", default="runs/main", help="directory of the 1B-step main run")
     a = p.parse_args()
+    LINEAGE[0] = (a.main_run,) + LINEAGE[0][1:]
     plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "STIXGeneral"],
                          "mathtext.fontset": "stix", "font.size": 7, "axes.edgecolor": MUTED,
                          "axes.labelcolor": INK, "xtick.color": MUTED, "ytick.color": MUTED,
