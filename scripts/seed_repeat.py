@@ -57,7 +57,7 @@ STAGE1 = ["--total-steps", "1e9", "--lr", "3e-4", "--lr-final", "3e-5", "--ent-s
 # runs/ft_geo (the stage the submitted policy comes from); checkpoints every 5M for the matched step
 FINETUNE = ["--total-steps", "3e8", "--lr", "1e-4", "--lr-final", "1e-5", "--ent-start", "0.003",
             "--ent-end", "0.001", "--adapt-warmup", "0", "--eval-every", "1e7", "--save-every", "5e6"]
-SMOKE = ["--total-steps", "2e5", "--sa-slots", "4", "--ma-slots", "1", "--eval-every", "1e12", "--save-every", "1e5"]
+SMOKE = ["--total-steps", "5e4", "--sa-slots", "4", "--ma-slots", "1", "--eval-every", "1e12", "--save-every", "2e4"]
 
 
 def run(cmd, log=None):
