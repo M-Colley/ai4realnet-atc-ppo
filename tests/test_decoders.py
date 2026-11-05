@@ -5,7 +5,7 @@ import numpy as np
 from atc_agent.fast_eval import EnsembleDecoder, StickyDecoder
 from atc_agent.inference import load_model
 
-MODEL = "runs/ft_geo_r2/final.zip"
+MODEL = "submission/policy.zip"
 
 
 def _obs(model, n=64, seed=0):
