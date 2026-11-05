@@ -298,6 +298,21 @@ fine-tune with prioritized replay~\citep{jiang2021plr} of mined hard scenarios
 scenarios with deep goals are excluded, so replay never rewards an entry).
 \TODO{results}
 
+\paragraph{The other MA failures are long detours, not congestion.} We re-flew
+each of the 33 MA failures with a goal outside every RA in three counterfactual
+settings: alone (other aircraft removed), and alone and in its scenario with
+actions sampled from the policy (16 seeds each). All 33 have an RA cluster
+across the straight line; their RA-free route is a median 1.76$\times$ the
+straight line. Flights with a detour ratio $\geq$1.5 are 3.8\% of MA flights
+but hold 27 of the 33 failures (failure rate 7.2\% vs.\ 0.06\% below). Flown
+alone, 20 of the 33 reach the goal, yet in their last 30\,min another aircraft
+is within 10\,NM only 18\% of the time (a lasting standoff in one pair): an
+encounter pushes them off their route, and they then shuttle back and forth
+along an RA edge or circle in a concave pocket between areas
+(median 5\,NM from an RA). The remaining 13 fail alone too; sampling rescues 2
+of them in 62\% of seeds and the other 11 in 11\%. These detour flights are
+what the reversal cost and the hard-scenario replay target.
+
 \begin{table}[t]
 \centering\small
 \caption{Failure classes (all timeouts): seed 42 and fresh mined episodes.}
@@ -312,7 +327,7 @@ Goal location & seed 42 & 50k & seed 42 & 20k\\
 inside RA, deeper than 5\,km & 23 & 94 & 1 & 16\\
 inside RA, capturable outside & 6 & 34 & 0 & 6\\
 within 10\,NM of an RA & 1 & 9 & 1 & 0\\
-far from RAs (congestion loops) & 32 & 196 & 2 & 64\\
+more than 10\,NM from any RA & 32 & 196 & 2 & 64\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -345,8 +360,9 @@ not seed variance \TODO{seed repeats}. The generator occasionally places goals
 inside RAs; we report them rather than trade safety for completion. The
 selection score is our own; the judges weigh the metrics jointly.
 
-\paragraph{Reproducibility.} Code, trained model and per-episode CSVs:
-\TODO{repository link}. Table~\ref{tab:results} is reproduced by
+\paragraph{Reproducibility.} Code, trained model, per-episode CSVs and one
+command per table, figure and seed repeat (\texttt{SUBMISSION.md}): branch
+\texttt{submission} of \TODO{repository link}. Table~\ref{tab:results} is reproduced by
 \texttt{python -m scripts.evaluate\_competition -{}-env sa|ma -{}-model
 <model>}.
 

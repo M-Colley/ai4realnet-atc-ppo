@@ -200,7 +200,14 @@ steps), the geodesic checkpoint has 17 fewer MA failures per 1000 scenarios
 | goal inside an area, deeper than capture radius | 23 | 94 | 1 | 16 |
 | goal inside an area, capturable from outside | 6 | 34 | 0 | 6 |
 | goal within 10 NM of an area | 1 | 9 | 1 | 0 |
-| goal far from areas (mostly congestion loops near shared goal regions) | 32 | 196 | 2 | 64 |
+| goal more than 10 NM from any area | 32 | 196 | 2 | 64 |
+
+**The other multi-agent failures are long detours, not congestion** (`atc_agent.failure_diag`, `runs/diag/fail_1185.md`).
+- 33 failures have their goal outside every area. Each was re-flown alone (other aircraft removed), and alone and in its scenario with actions sampled from the policy (16 seeds each).
+- All 33 have a restricted-area cluster across the straight line. Their area-free route is a median 1.76 times the straight line.
+- Flights with a detour ratio of at least 1.5 are 3.8% of multi-agent flights but hold 27 of the 33 failures: a failure rate of 7.2%, against 0.06% below that ratio.
+- 20 of the 33 reach the goal when flown alone. Yet in their last 30 min another aircraft is within 10 NM only 18% of the time; one pair is a lasting standoff. An encounter pushes them off their route, and they then shuttle back and forth along an area edge or circle in a concave pocket between areas, a median 5 NM from an area.
+- The other 13 also fail alone. Sampling rescues 2 of them in 62% of seeds and the remaining 11 in 11%.
 
 **We chose not to enter restricted areas.** Completion would rise by about
 0.3 points, but at the cost of safety events. For the shallow goals the
