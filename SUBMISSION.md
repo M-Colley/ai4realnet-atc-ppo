@@ -9,7 +9,8 @@ actor-critic that, every 10 s, picks a heading offset from the goal bearing and 
 target for each aircraft (`MultiDiscrete([17, 6])`). Training ran in BlueSky-Batch, an
 exact batched re-hosting of the official environments (`atc_agent/batched_env.py`,
 verified step by step against them in `tests/test_equivalence.py`). Method and results
-are described in the technical report (`docs/solution/report/report.pdf`); the agent code
+are described in the technical report (LaTeX source in `docs/solution/report/`, build command
+below; the PDF goes with the submission email); the agent code
 is documented in [`atc_agent/README.md`](atc_agent/README.md).
 
 ## What is in `submission/`
@@ -115,8 +116,8 @@ uv run --no-sync python -m atc_agent.select_video --model submission/policy.zip 
 # trajectories of chosen seed-42 scenarios (report Fig. 2)
 uv run --no-sync python -m atc_agent.plot_flights --model submission/policy.zip --seed 42 --kind ma --scenarios 261,788 --out runs/diag/flights.png
 # diagnostics used in the report
-uv run --no-sync python -m atc_agent.failure_diag --model submission/policy.zip --csv submission/results/fast_ma.csv --out runs/diag/fail
 uv run --no-sync python -m atc_agent.detour_diag --model submission/policy.zip --check submission/results/fast_ma.csv --out runs/diag/detour
+uv run --no-sync python -m atc_agent.failure_diag --model submission/policy.zip --csv submission/results/fast_ma.csv \n    --agents-csv runs/diag/detour_agents.csv --out runs/diag/fail
 uv run --no-sync python -m atc_agent.diagnose_sa --model submission/policy.zip --out runs/diag/sa
 # the report (TeX Live or TinyTeX)
 cd docs/solution/report && latexmk -pdf report.tex
