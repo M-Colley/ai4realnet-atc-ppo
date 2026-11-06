@@ -37,6 +37,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEO_INIT = "submission/geo_init/init.zip"
@@ -69,11 +70,71 @@ def run(cmd, log=None):
         subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def train(name, args, extra, a):
-    os.makedirs(os.path.join(ROOT, "runs", name), exist_ok=True)
-    cmd = [sys.executable, "-u", "-m", "atc_agent.train", "--run", name, "--seed", str(a.seed),
-           "--workers", str(a.workers), "--device", a.device] + COMMON + args + extra
-    run(cmd, os.path.join(ROOT, "runs", name, "train.log"))
+def arg(args, name):
+    return args[len(args) - 1 - args[::-1].index(name) + 1]       # last occurrence wins, as in argparse
+
+
+def kill_tree(pid):
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True)
+    else:
+        import signal
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+
+
+def train(name, args, extra, a, resume=None, stop_at=None):
+    """Train stage ``name``. If the run dies (e.g. host out of memory), it is resumed
+    from its latest checkpoint with the remaining steps, the LR / entropy schedules
+    continued and a new seed (up to --tries attempts). With ``stop_at`` the run is
+    stopped once a checkpoint within 3M steps of that step exists (schedules unchanged)."""
+    out = os.path.join(ROOT, "runs", name)
+    os.makedirs(out, exist_ok=True)
+    args = args + extra
+    total = int(float(arg(args, "--total-steps")))
+    ent0, ent1 = float(arg(args, "--ent-start")), float(arg(args, "--ent-end"))
+    spec_path = os.path.join(out, "stage.json")
+    if not os.path.exists(spec_path):
+        t0 = 0
+        if resume:
+            import zipfile
+            with zipfile.ZipFile(os.path.join(ROOT, resume)) as z:
+                t0 = int(json.loads(z.read("data"))["num_timesteps"])
+        with open(spec_path, "w") as f:
+            json.dump(dict(t0=t0, t_end=t0 + total, resume=resume), f)
+    with open(spec_path) as f:
+        spec = json.load(f)
+    for attempt in range(a.tries):
+        state = os.path.join(out, "train_state.json")
+        t = spec["t0"]
+        if os.path.exists(os.path.join(out, "latest.zip")) and os.path.exists(state):
+            with open(state) as f:
+                t = int(json.load(f)["timesteps"])
+        if (stop_at and matched_checkpoint(out, stop_at)) or spec["t_end"] - t < 1_000_000:
+            return
+        start = "runs/" + name + "/latest.zip" if t > spec["t0"] else spec["resume"]
+        frac = (t - spec["t0"]) / (spec["t_end"] - spec["t0"])
+        sched = ["--total-steps", str(spec["t_end"] - t), "--ent-start", f"{ent0 + (ent1 - ent0) * frac:.6g}"]
+        cmd = [sys.executable, "-u", "-m", "atc_agent.train", "--run", name, "--seed", str(a.seed + 1000 * attempt),
+               "--workers", str(a.workers), "--device", a.device] + COMMON + args + sched
+        if start:
+            cmd += ["--resume", start]
+        print("+", " ".join(cmd), flush=True)
+        with open(os.path.join(out, "train.log"), "a") as log:
+            p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                                 start_new_session=os.name != "nt")
+            while p.poll() is None:
+                if stop_at and matched_checkpoint(out, stop_at):
+                    time.sleep(30)                      # let the checkpoint finish writing
+                    kill_tree(p.pid)
+                    p.wait()
+                    print(f"stopped at the matched checkpoint {matched_checkpoint(out, stop_at)}", flush=True)
+                    return
+                time.sleep(60)
+        if p.returncode == 0:
+            return
+        print(f"training exited with {p.returncode}; resuming from the latest checkpoint", flush=True)
+        time.sleep(5 if a.smoke else 300)
+    raise SystemExit(f"{name}: training failed {a.tries} times")
 
 
 def matched_checkpoint(run_dir, target):
@@ -85,9 +146,11 @@ def matched_checkpoint(run_dir, target):
     return best if abs(step(best) - target) <= 3_000_000 else None
 
 
-def evaluate(run_dir, a):
+def evaluate(run_dir, a, target=MATCHED_STEPS):
     out = {}
-    models = {"matched": matched_checkpoint(run_dir, MATCHED_STEPS), "final": os.path.join(run_dir, "final.zip")}
+    models = {"matched": matched_checkpoint(run_dir, target)}
+    if not a.until_matched:
+        models["final"] = os.path.join(run_dir, "final.zip")
     ev = os.path.join(run_dir, "eval")
     os.makedirs(ev, exist_ok=True)
     for tag, model in models.items():
@@ -117,6 +180,10 @@ def main():
     p.add_argument("--episodes", type=int, default=1000, help="official-stream scenarios per track for the evaluation")
     p.add_argument("--eval-only", action="store_true")
     p.add_argument("--smoke", action="store_true", help="tiny pipeline check (minutes), not a repeat")
+    p.add_argument("--until-matched", action="store_true",
+                   help="stop the fine-tune at the submitted policy's step (115M of 300M; same schedules) "
+                        "and evaluate only that checkpoint")
+    p.add_argument("--tries", type=int, default=3, help="training attempts per stage (resumed after a crash)")
     a = p.parse_args()
     sys.path.insert(0, ROOT)
     os.chdir(ROOT)
@@ -124,13 +191,14 @@ def main():
     tag = f"rep_{a.recipe}_s{a.seed}" + ("_smoke" if a.smoke else "")
     extra = SMOKE if a.smoke else []
     run_dir = os.path.join(ROOT, "runs", tag)
+    target = GEO_INIT_STEPS if a.smoke else MATCHED_STEPS     # smoke: stop at the first checkpoint
     if not a.eval_only:
         resume = GEO_INIT
         if a.recipe == "scratch":
             train(tag + "_stage1", STAGE1, extra, a)
             resume = f"runs/{tag}_stage1/final.zip"
-        train(tag, FINETUNE + ["--resume", resume], extra, a)
-    evaluate(run_dir, a)
+        train(tag, FINETUNE, extra, a, resume=resume, stop_at=target if a.until_matched else None)
+    evaluate(run_dir, a, target)
 
 
 if __name__ == "__main__":

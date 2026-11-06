@@ -85,6 +85,10 @@ uv run --no-sync python -m scripts.seed_repeat --seed 11                    # ~1
 uv run --no-sync python -m scripts.seed_repeat --seed 12 --recipe scratch   # ~45 h
 ```
 
+`--until-matched` stops the fine-tune at the submitted policy's step (115M of its 300M steps, same
+schedules; ~40% of the time). A run that dies (e.g. out of memory) is resumed from its latest
+checkpoint with the schedules continued (`--tries`, default 3).
+
 - `finetune` (default) repeats the stage that produced the policy, from the same starting
   checkpoint (`submission/geo_init`) with identical hyperparameters: it measures the
   run-to-run spread of the final stage.
