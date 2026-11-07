@@ -109,7 +109,9 @@ def train(name, args, extra, a, resume=None, stop_at=None):
         if os.path.exists(os.path.join(out, "latest.zip")) and os.path.exists(state):
             with open(state) as f:
                 t = int(json.load(f)["timesteps"])
-        if (stop_at and matched_checkpoint(out, stop_at)) or spec["t_end"] - t < 1_000_000:
+        # done = within 1M steps of the end (a few rollouts); tiny smoke stages use half their length
+        if (stop_at and matched_checkpoint(out, stop_at)) or \
+                spec["t_end"] - t < min(1_000_000, (spec["t_end"] - spec["t0"]) // 2):
             return
         start = "runs/" + name + "/latest.zip" if t > spec["t0"] else spec["resume"]
         frac = (t - spec["t0"]) / (spec["t_end"] - spec["t0"])
