@@ -19,7 +19,7 @@ is documented in [`atc_agent/README.md`](atc_agent/README.md).
 | --- | --- |
 | `policy.zip` | The submitted policy (SB3 PPO zip, 1,370,310,656 training steps; sha256 `d5532eab…d08bb`). |
 | `results/official_{sa,ma}.csv` | Its per-episode metrics from the official harness, seed 42 (1000 SA episodes, 1000 × 10 MA agent-episodes). |
-| `results/fast_{sa,ma}.csv` | The same stream flown in BlueSky-Batch (`atc_agent.fast_eval`). For the parent below, SA was identical episode by episode and MA identical in 998 of 1000 scenarios (agents are listed in a different order). |
+| `results/fast_{sa,ma}.csv` | The same stream flown in BlueSky-Batch (`atc_agent.fast_eval`): SA identical episode by episode, MA identical in all 1000 scenarios (agents are listed in a different order; for the parent 998 of 1000). |
 | `rev_init/` | The parent: the policy before the last stage (1,185,220,608 steps; sha256 `dd22d299…250fa4`; submitted until 2026-11-07), with its safety multipliers. Start of the last stage; used by the seed repeats. |
 | `results/parent/` | The parent's official and fast results on the same stream. |
 | `geo_init/` | Start of the ft_geo stage (time-aware 1.07B-step model with the route-hint inputs added, plus its safety multipliers); used by the seed repeats. |
@@ -28,19 +28,19 @@ Official harness, seed 42 (`scripts/evaluate_competition.py`):
 
 | Metric (mean per flight) | SA policy | SA fly-direct | MA policy | MA fly-direct |
 | --- | ---: | ---: | ---: | ---: |
-| Goal completion [%] | TODO | 100.0 | TODO | 100.0 |
-| Flight time [s] | TODO | 852.0 | TODO | 847.7 |
-| Intrusion events | TODO | 1.127 | TODO | 0.877 |
-| Restricted-area events | TODO | 0.813 | TODO | 0.799 |
-| Sector-exit events | TODO | 0.000 | TODO | 0.000 |
+| Goal completion [%] | 99.70 | 100.0 | 99.39 | 100.0 |
+| Flight time [s] | 978.7 | 852.0 | 916.7 | 847.7 |
+| Intrusion events | 0.126 | 1.127 | 0.008 | 0.877 |
+| Restricted-area events | 0.012 | 0.813 | 0.009 | 0.799 |
+| Sector-exit events | 0.005 | 0.000 | 0.007 | 0.000 |
 
-TODO (official run in progress): BlueSky-Batch on the same stream gives SA 99.70 % / 978.7 s /
-0.126 / 0.012 / 0.005 and MA 99.39 % / 916.7 s / 0.008 / 0.009 / 0.007. Against the parent,
-paired over seeds 42 and 777 (2000 scenarios per track): flight time -10.5 s SA [-16.9, -4.1]
-and -4.2 s MA [-6.0, -2.4], violations and MA failures unchanged.
+BlueSky-Batch (`results/fast_*`) reproduces these runs: SA episode by episode, MA in all 1000
+scenarios. Against the parent, paired over seeds 42 and 777 (2000 scenarios per track),
+flight time drops by 10.5 s SA [4.1, 16.9] and 4.2 s MA [2.4, 6.0]; violations and MA
+failures are unchanged.
 
 Most SA intrusions cannot be avoided: on a separate 1000-episode stream (seed 777), 116 of the
-parent's 141 intrusion events (TODO: submitted policy) are already present at spawn, because the scenario generator can
+policy's 136 intrusion events are already present at spawn, because the scenario generator can
 place intruders within 5 NM of the start (`atc_agent.diagnose_sa`).
 
 ## Install (fresh clone)
