@@ -1,6 +1,7 @@
 """
-Learning curves of the submitted lineage (main run -> time-aware -> geodesic)
-and of the time-aware control, from the training logs (progress.jsonl).
+Learning curves of the submitted lineage (main run -> time-aware -> geodesic ->
+indecision costs) and of two controls that continue a stage without change
+(time-aware; geodesic without the costs), from the training logs (progress.jsonl).
 
 Metrics are those of the training rollouts' competition-configuration episodes
 (SA with 10 intruders, MA original cohort), i.e. of the *stochastic* policy, as
@@ -21,9 +22,12 @@ import numpy as np  # noqa: E402
 
 # (run dir, first step kept, last step kept); steps are global across resumes
 LINEAGE = [("runs/main", 0, 1.0005e9), ("runs/ft_ta", 1.0e9, 1.0705e9), ("runs/ft_geo", 1.07e9, 1.135e9),
-           ("runs/ft_geo_r", 1.135e9, 1.1675e9), ("runs/ft_geo_r2", 1.1673e9, 1.19e9)]
+           ("runs/ft_geo_r", 1.135e9, 1.1675e9), ("runs/ft_geo_r2", 1.1673e9, 1.1853e9),
+           ("runs/ft_rev", 1.1853e9, 1.371e9)]
 CONTROL = [("runs/ft_ta", 1.0703e9, 1.31e9)]
-SPLIT, GEO_START = 1.0e9, 1.0704e9
+CONTROL2 = [("runs/ft_geo_r3", 1.1853e9, 1.371e9)]     # same steps as ft_rev, without the costs
+SPLIT, GEO_START, REV_START = 1.0e9, 1.0704e9, 1.1852e9
+DASH, DOT = (0, (3, 1.5)), (0, (1, 1.2))
 SERIES = {"sa10": ("single-agent", "#2a78d6"), "ma_orig": ("multi-agent", "#eb6834")}
 LAMBDAS = [("lam_intr", "intrusion", "-"), ("lam_ra", "restricted area", "--"), ("lam_sec", "sector exit", ":")]
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
@@ -66,15 +70,15 @@ def main():
                          "mathtext.fontset": "stix", "font.size": 7, "axes.edgecolor": MUTED,
                          "axes.labelcolor": INK, "xtick.color": MUTED, "ytick.color": MUTED,
                          "axes.linewidth": 0.5, "xtick.major.width": 0.5, "ytick.major.width": 0.5})
-    lin, ctl = load(LINEAGE), load(CONTROL)
+    lin, ctl, ctl2 = load(LINEAGE), load(CONTROL), load(CONTROL2)
     fig, axes = plt.subplots(4, 2, figsize=(3.4, 3.9), sharey="row",
                              gridspec_kw=dict(width_ratios=[1.0, 1.0], wspace=0.06, hspace=0.18))
     rows = [("timeout", "timeouts [%]", 100.0, False), ("violations", "violations / flight", 1.0, True),
             ("flight_time", "flight time [s]", 1.0, False)]
-    for col, (window, xlim) in enumerate([(10e6, (0, SPLIT)), (5e6, (SPLIT, 1.30e9))]):
+    for col, (window, xlim) in enumerate([(10e6, (0, SPLIT)), (5e6, (SPLIT, 1.375e9))]):
         for key, (label, color) in SERIES.items():
-            for data, ls, lw in ((lin, "-", 0.9), (ctl, (0, (3, 1.5)), 0.7)):
-                if col == 0 and data is ctl:
+            for data, ls, lw in ((lin, "-", 0.9), (ctl, DASH, 0.7), (ctl2, DOT, 0.8)):
+                if col == 0 and data is not lin:
                     continue
                 t, m = windowed(data, key, window)
                 for r, (mk, _, scale, _) in enumerate(rows):
@@ -94,7 +98,8 @@ def main():
             if r < 3:
                 ax.tick_params(labelbottom=False)
             if col == 1:
-                ax.axvline(GEO_START / 1e9, color=MUTED, lw=0.5, ls=":")
+                for x in (GEO_START, REV_START):
+                    ax.axvline(x / 1e9, color=MUTED, lw=0.5, ls=":")
                 ax.spines["left"].set_visible(False)
                 ax.tick_params(left=False)
     for r, (_, ylabel, _, logy) in enumerate(rows):
@@ -110,12 +115,14 @@ def main():
     axes[0, 0].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
     axes[0, 1].text(1.035, 1.02, "time-\naware", transform=axes[0, 1].get_xaxis_transform(), ha="center",
                     va="bottom", color=MUTED, fontsize=6)
-    axes[0, 1].text(1.13, 1.02, "geodesic", transform=axes[0, 1].get_xaxis_transform(), ha="center",
+    axes[0, 1].text(1.128, 1.02, "geodesic", transform=axes[0, 1].get_xaxis_transform(), ha="center",
                     va="bottom", color=MUTED, fontsize=6)
+    axes[0, 1].text(1.28, 1.02, "+indecision\ncosts", transform=axes[0, 1].get_xaxis_transform(),
+                    ha="center", va="bottom", color=MUTED, fontsize=6)
     handles, labels = axes[0, 1].get_legend_handles_labels()
-    handles.append(plt.Line2D([], [], color=MUTED, ls=(0, (3, 1.5)), lw=0.7))
-    labels.append("control: time-aware continued")
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.94), ncol=3, frameon=False,
+    handles += [plt.Line2D([], [], color=MUTED, ls=DASH, lw=0.7), plt.Line2D([], [], color=MUTED, ls=DOT, lw=0.8)]
+    labels += ["control: time-aware continued", "control: geodesic continued, no costs"]
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.94), ncol=2, frameon=False,
                handlelength=1.8, columnspacing=1.0, fontsize=6.5)
     axes[3, 0].legend(frameon=False, loc="lower right", handlelength=2.2, fontsize=6)
     fig.savefig(a.out, bbox_inches="tight", pad_inches=0.02)
