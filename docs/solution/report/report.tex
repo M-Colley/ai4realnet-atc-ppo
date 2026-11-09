@@ -382,12 +382,12 @@ on seed~42.
 Paired tests control for scenario noise, not seed variance, and each stage was
 trained once. Seed repeats re-train both fine-tuning stages from the 1070M
 checkpoint with new seeds (\texttt{scripts/seed\_repeat.py}). In the first
-(seed 11) the 1185M checkpoint has 16 [2, 32] more MA failures per 1000
-scenarios on seed 42 than ours and the final one 8 [$-5$, $+22$] more (score
-$-0.16$ [$-0.42$, $+0.05$]); its indecision-cost stage again shortened MA
-flights, by 8.1\,s [5.8, 10.7]. Our geodesic stage was stopped while we
-monitored seed 42, which favours our checkpoints in this comparison
-\TODO{seeds 12, 13; held-out seed 777}. The generator occasionally places
+(seed 11; seeds 42 and 777 pooled) the final checkpoint has 5.5 [$-4$, $+16$]
+more MA failures per 1000 scenarios than ours (score $-0.14$ [$-0.31$,
+$+0.01$]), and its indecision-cost stage again shortened MA flights, by
+7.2\,s [5.3, 9.0]. Its 1185M checkpoint has 12 [2, 23] more MA failures than
+ours (8 [$-6$, $+23$] on seed 777 alone); we stopped our geodesic stage while
+monitoring seed 42 \TODO{seeds 12, 13}. The generator occasionally places
 goals inside RAs; we report them rather than trade safety for completion. The
 selection score is our own; the judges weigh the metrics jointly.
 
