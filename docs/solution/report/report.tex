@@ -247,7 +247,8 @@ checkpoint, with unchanged violations and MA failures ($-2.5$ [$-12$, $+6.5$]
 per 1000 scenarios; score $+0.17$ [$+0.01$, $+0.35$]). The control that
 continues the geodesic stage for the same 185M steps without the costs flies
 2.6\,s [0.8, 4.6] (MA) and 7.5\,s [1.9, 13.4] (SA) longer than the submitted
-policy. The training curves (Fig.~\ref{fig:training})
+policy, and the stage shortens MA flights in both seed repeats
+(\S\ref{sec:limits}). The training curves (Fig.~\ref{fig:training})
 agree: violations fall five-fold in the first 0.1B steps, the rest of the
 main run mostly shortens flights and reduces timeouts, and in the fine-tunes
 MA timeouts keep falling under the geodesic potential but not in the control.
@@ -378,16 +379,16 @@ checkpoint with the 1300M control, by averaging their weights or their action
 probabilities, adds 14 [1, 29] and 19 [5, 36] MA failures per 1000 scenarios
 on seed~42.
 
-\section{Limitations}
+\section{Limitations}\label{sec:limits}
 Paired tests control for scenario noise, not seed variance, and each stage was
 trained once. Seed repeats re-train both fine-tuning stages from the 1070M
-checkpoint with new seeds (\texttt{scripts/seed\_repeat.py}). In the first
-(seed 11; seeds 42 and 777 pooled) the final checkpoint has 5.5 [$-4$, $+16$]
-more MA failures per 1000 scenarios than ours (score $-0.14$ [$-0.31$,
-$+0.01$]), and its indecision-cost stage again shortened MA flights, by
-7.2\,s [5.3, 9.0]. Its 1185M checkpoint has 12 [2, 23] more MA failures than
-ours (8 [$-6$, $+23$] on seed 777 alone); we stopped our geodesic stage while
-monitoring seed 42 \TODO{seeds 12, 13}. The generator occasionally places
+checkpoint with new seeds (\texttt{scripts/seed\_repeat.py}). Pooled over
+seeds 42 and 777, the two finished repeats (seeds 11, 12) end with 5.5
+[$-4$, $+16$] and 7 [$-3.5$, $+18.5$] more MA failures per 1000 scenarios
+than ours (score $-0.14$ and $-0.13$, both CIs include 0): our run is a
+favourable draw, but within seed noise. Their indecision-cost stages again
+shortened MA flights, by 7.2\,s [5.3, 9.0] and 6.3\,s [4.4, 8.3], with
+unchanged violations \TODO{seed 13}. The generator occasionally places
 goals inside RAs; we report them rather than trade safety for completion. The
 selection score is our own; the judges weigh the metrics jointly.
 
