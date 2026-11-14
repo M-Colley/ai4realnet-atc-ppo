@@ -255,8 +255,10 @@ keeps it out.
 ## 7. Limitations
 
 - Paired tests control for scenario noise, not for seed variance, and each stage was trained once. Seed repeats re-train both fine-tuning stages from the 1070M checkpoint with new seeds (`scripts/seed_repeat.py`).
-  - Seed 11, pooled over seeds 42 and 777 (2000 scenarios per track): the final checkpoint has 5.5 [−4, +16] more multi-agent failures per 1000 scenarios than ours (score −0.14 [−0.31, +0.01]). Its indecision-cost stage again shortened multi-agent flights, by 7.2 s [5.3, 9.0] (ours: 4.2 s).
-  - Its 1185M checkpoint has 12 [2, 23] more multi-agent failures than ours, and 8 [−6, +23] on the held-out seed 777 alone. Our geodesic stage was stopped while we monitored seed 42, which favours our checkpoints on that stream. TODO: seeds 12 and 13.
+  - Pooled over seeds 42 and 777 (2000 scenarios per track), the two finished repeats end with more multi-agent failures than ours: 5.5 [−4, +16] per 1000 scenarios for seed 11 and 7 [−3.5, +18.5] for seed 12. Their scores are −0.14 [−0.31, +0.01] and −0.13 [−0.31, +0.04]. Both intervals include 0, so our run is a favourable draw, but within seed noise.
+  - Their indecision-cost stages again shortened multi-agent flights: 7.2 s [5.3, 9.0] for seed 11 and 6.3 s [4.4, 8.3] for seed 12, against 4.2 s for ours. Violations did not change.
+  - At the 1185M step the repeats have 12 [2, 23] and 7.5 [−2.5, +18.5] more multi-agent failures than our 1185M checkpoint. Our geodesic stage was stopped while we monitored seed 42.
+  - TODO: seed 13.
 - The scenario generator occasionally produces goals inside restricted areas. We report them separately rather than trade safety for completion.
 - The selection score is our own; the official judging weighs the metrics jointly.
 
