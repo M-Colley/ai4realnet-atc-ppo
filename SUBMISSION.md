@@ -22,6 +22,7 @@ is documented in [`atc_agent/README.md`](atc_agent/README.md).
 | `results/fast_{sa,ma}.csv` | The same stream flown in BlueSky-Batch (`atc_agent.fast_eval`): SA identical episode by episode, MA identical in all 1000 scenarios (agents are listed in a different order; for the parent 998 of 1000). |
 | `rev_init/` | The parent: the policy before the last stage (1,185,220,608 steps; sha256 `dd22d299…250fa4`; submitted until 2026-11-07), with its safety multipliers. Start of the last stage; used by the seed repeats. |
 | `results/parent/` | The parent's official and fast results on the same stream. |
+| `results/fast_s777_{sa,ma}.csv`, `results/parent/fast_s777_*` | Both policies on a second stream (seed 777) in BlueSky-Batch, for the pooled paired comparisons. |
 | `geo_init/` | Start of the ft_geo stage (time-aware 1.07B-step model with the route-hint inputs added, plus its safety multipliers); used by the seed repeats. |
 
 Official harness, seed 42 (`scripts/evaluate_competition.py`):
@@ -105,6 +106,15 @@ uv run --no-sync python -m scripts.seed_repeat --seed 13 --recipe scratch   # ~5
 - `scratch`: the method from scratch with the final code (all features on from step 0), then
   both fine-tuning stages. It is not the exact staged lineage below, so it tests the method
   rather than this checkpoint.
+
+The report pools each comparison over the seed-42 and seed-777 streams (2000 units per
+track) and averages the last stage over all training runs (the submitted lineage plus the
+repeats). One command evaluates whatever is missing on seed 777 (~20 min per checkpoint) and
+writes `runs/seed_repeats_pooled.json`:
+
+```bash
+uv run --no-sync python -m scripts.seed_repeat_pooled --seeds 11 12 13
+```
 
 `--parent-only` stops after ft_geo. A run that dies (e.g. out of memory) is resumed from its
 latest checkpoint with the schedules continued (`--tries`, default 3).
