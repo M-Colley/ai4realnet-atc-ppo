@@ -46,3 +46,11 @@ A candidate replaces the submitted policy only if all of these hold:
 
 If none qualifies, the submission stays as it is and all outcomes are reported as ablations.
 Freeze: 2026-11-25. Official-harness re-run, video and report update follow the freeze.
+
+## Amendments (recorded before the affected result)
+
+- 2026-11-15, test 2: the scale-up keeps 5 restricted areas, not 8. The observation has exactly
+  five obstacle tokens, so more areas would be invisible to the policy; only traffic is scaled
+  (10/15/20/30 MA aircraft, 10/20/30 SA intruders, 300 scenarios per size, `atc_agent.scale_eval`).
+  Test 3 adds a second classical row, MVP behind the area-free grid route (`--nav route`),
+  because plain fly-direct + MVP ignores restricted areas by construction.
