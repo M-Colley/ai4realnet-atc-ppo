@@ -247,7 +247,7 @@ checkpoint, with unchanged violations and MA failures ($-2.5$ [$-12$, $+6.5$]
 per 1000 scenarios; score $+0.17$ [$+0.01$, $+0.35$]). The control that
 continues the geodesic stage for the same 185M steps without the costs flies
 2.6\,s [0.8, 4.6] (MA) and 7.5\,s [1.9, 13.4] (SA) longer than the submitted
-policy, and the stage shortens MA flights in both seed repeats
+policy, and the effect replicates in all three seed repeats
 (\S\ref{sec:limits}). The training curves (Fig.~\ref{fig:training})
 agree: violations fall five-fold in the first 0.1B steps, the rest of the
 main run mostly shortens flights and reduces timeouts, and in the fine-tunes
@@ -380,24 +380,24 @@ probabilities, adds 14 [1, 29] and 19 [5, 36] MA failures per 1000 scenarios
 on seed~42.
 
 \section{Limitations}\label{sec:limits}
-Paired tests control for scenario noise, not seed variance, and each stage was
-trained once. Seed repeats re-train both fine-tuning stages from the 1070M
-checkpoint with new seeds (\texttt{scripts/seed\_repeat.py}). Pooled over
-seeds 42 and 777, the two finished repeats (seeds 11, 12) end with 5.5
-[$-4$, $+16$] and 7 [$-3.5$, $+18.5$] more MA failures per 1000 scenarios
-than ours (score $-0.14$ and $-0.13$, both CIs include 0): our run is a
-favourable draw, but within seed noise. Their indecision-cost stages again
-shortened MA flights, by 7.2\,s [5.3, 9.0] and 6.3\,s [4.4, 8.3], with
-unchanged violations \TODO{seed 13}. The generator occasionally places
-goals inside RAs; we report them rather than trade safety for completion. The
+Paired tests control for scenario noise, not seed variance. Seed repeats
+re-train both fine-tuning stages from the 1070M checkpoint with new seeds
+(\texttt{scripts/seed\_repeat.py}). Pooled over seeds 42 and 777, the three
+repeats (seeds 11--13) end with 5.5, 7 and 1.5 more MA failures per 1000
+scenarios than ours (mean $+4.7$ [$-4$, $+13.5$], 0.05 points of MA
+completion; score $-0.11$ [$-0.23$, $+0.03$], $p=0.03$ in a $t$-test over
+runs): our run is a favourable draw. The indecision-cost stage replicates:
+averaged over the four runs, it shortens MA flights by 6.5\,s [5.5, 7.4] and
+SA flights by 9.4\,s [6.0, 12.9] and raises the score by 0.15 [0.07, 0.24]
+with unchanged violations, and MA failures fall in every run ($-5$ [$-10.5$,
+$+0.5$]); the time and score effects also pass the $t$-test ($p\le0.03$). Goals inside RAs stay failures by design, and the
 selection score is our own; the judges weigh the metrics jointly.
 
 \paragraph{Reproducibility.} Code, trained model, per-episode CSVs and one
-command per table, figure and seed repeat (\texttt{SUBMISSION.md}): branch
-\texttt{submission} of \TODO{repository link}. Table~\ref{tab:results} is reproduced by
-\texttt{python -m scripts.evaluate\_competition -{}-env sa|ma -{}-model
-<model>}. The videos show five MA scenarios picked by a fixed rule from 300
-(\texttt{atc\_agent.select\_video}).
+command per table, figure and seed repeat, including the official evaluation
+behind Table~\ref{tab:results} (\texttt{SUBMISSION.md}), are on branch
+\texttt{submission} of \TODO{repository link}. The videos show five MA
+scenarios picked by a fixed rule from 300 (\texttt{atc\_agent.select\_video}).
 
 {\footnotesize\setlength{\bibsep}{1pt plus 0.5pt}
 \bibliographystyle{unsrtnat}
