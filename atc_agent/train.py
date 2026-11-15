@@ -224,6 +224,8 @@ def main():
                    help="cost per 90 deg of a direct left<->right flip of the heading offset (0.01 = 1 s)")
     p.add_argument("--speed-jump-penalty", type=float, default=0.0,
                    help="cost per speed bin changed beyond one bin between decisions (0.01 = 1 s)")
+    p.add_argument("--time-cost", type=float, default=0.01,
+                   help="cost per second flown (0.01 defines the reward unit; other values reweight time)")
     p.add_argument("--pool", default=None,
                    help='pickle {"sa": [Scenario], "ma": [Scenario]} for prioritized replay')
     p.add_argument("--pool-prob-sa", type=float, default=0.0, help="SA restarts drawn from the pool")
@@ -262,7 +264,8 @@ def main():
     cfgs = [dict(sa_slots=args.sa_slots, ma_slots=args.ma_slots, sa_intruders=sa_choices,
                  action_frequency=args.action_frequency, seed=args.seed * 100_003 + 7919 * i,
                  reward=dict(timeout=args.timeout_penalty, geodesic=float(args.geodesic_progress),
-                             reversal=args.reversal_penalty, speed_jump=args.speed_jump_penalty),
+                             reversal=args.reversal_penalty, speed_jump=args.speed_jump_penalty,
+                             time=args.time_cost),
                  pool={k: pool[k] for k in ("sa", "ma") if k in pool} if pool else None,
                  pool_prob=dict(sa=args.pool_prob_sa, ma=args.pool_prob_ma))
             for i in range(args.workers)]
