@@ -54,3 +54,12 @@ Freeze: 2026-11-25. Official-harness re-run, video and report update follow the 
   (10/15/20/30 MA aircraft, 10/20/30 SA intruders, 300 scenarios per size, `atc_agent.scale_eval`).
   Test 3 adds a second classical row, MVP behind the area-free grid route (`--nav route`),
   because plain fly-direct + MVP ignores restricted areas by construction.
+- 2026-11-16, tests 4/5 and control (execution only): from the first resume of ft_time on (at
+  1,445M of 1,520M steps) every stage runs 13 workers x (96 SA + 8 MA slots) instead of
+  ft_rev's 26 x (48 + 4). Seats (2288), rollout (2288 x 128), batches and all PPO settings are
+  unchanged; only the number of simulator processes halves, because the shared PC's memory
+  could no longer hold 26 (a worker holds ~1.05 GiB at either seat count, measured). The
+  per-worker scenario seeds differ, which is random variation like any resume.
+- 2026-11-15, test 4: the pool from seeds 3001-3020 holds 305 SA scenarios (6 timeouts + 299
+  slow) and 17 MA timeout scenarios; 244 of 261 MA timeout scenarios have a goal inside a
+  restricted area and are excluded as specified. Replay probabilities are kept.
