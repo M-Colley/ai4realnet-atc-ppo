@@ -60,6 +60,8 @@ Freeze: 2026-11-25. Official-harness re-run, video and report update follow the 
   unchanged; only the number of simulator processes halves, because the shared PC's memory
   could no longer hold 26 (a worker holds ~1.05 GiB at either seat count, measured). The
   per-worker scenario seeds differ, which is random variation like any resume.
-- 2026-11-15, test 4: the pool from seeds 3001-3020 holds 305 SA scenarios (6 timeouts + 299
-  slow) and 17 MA timeout scenarios; 244 of 261 MA timeout scenarios have a goal inside a
-  restricted area and are excluded as specified. Replay probabilities are kept.
+- 2026-11-15, test 4: the pool from seeds 3001-3020 holds 315 SA scenarios (16 timeouts + 299
+  slow) and 261 MA timeout scenarios; 10 SA timeouts and 244 of 505 MA timeout scenarios have a
+  goal inside a restricted area and are excluded as specified (verified: no kept scenario has a
+  goal inside an area). Replay probabilities are kept. (Corrected 2026-11-16: the first version
+  of this note misread the pool's kept counts as totals.)
