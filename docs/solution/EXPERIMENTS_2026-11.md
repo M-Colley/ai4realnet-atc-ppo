@@ -60,6 +60,12 @@ Freeze: 2026-11-25. Official-harness re-run, video and report update follow the 
   unchanged; only the number of simulator processes halves, because the shared PC's memory
   could no longer hold 26 (a worker holds ~1.05 GiB at either seat count, measured). The
   per-worker scenario seeds differ, which is random variation like any resume.
+- 2026-11-18, control (execution only): from its resume at 1,403.7M steps, ft_cont runs
+  8 workers x (156 SA + 13 MA slots): the same 2288 seats, 12:1 SA:MA slot ratio, rollout,
+  batches and PPO settings. A worker holds ~1.15 GiB at 286 seats as at 176 (measured), so the
+  trainer drops from ~24 to ~17 GiB and can start at 28 GiB of free commit memory; overnight the
+  PC kept 29-34 GiB free, under the previous 34 GiB start condition. Decided before any
+  ft_cont evaluation exists.
 - 2026-11-15, test 4: the pool from seeds 3001-3020 holds 315 SA scenarios (16 timeouts + 299
   slow) and 261 MA timeout scenarios; 10 SA timeouts and 244 of 505 MA timeout scenarios have a
   goal inside a restricted area and are excluded as specified (verified: no kept scenario has a
