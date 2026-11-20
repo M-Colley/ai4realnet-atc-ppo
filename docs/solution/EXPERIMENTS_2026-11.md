@@ -71,3 +71,39 @@ Freeze: 2026-11-25. Official-harness re-run, video and report update follow the 
   goal inside a restricted area and are excluded as specified (verified: no kept scenario has a
   goal inside an area). Replay probabilities are kept. (Corrected 2026-11-16: the first version
   of this note misread the pool's kept counts as totals.)
+
+## Results (2026-11-20; all candidates complete before the freeze)
+
+Decision: no candidate meets rule 1, so the submission stays (`runs/ft_rev/final.zip`).
+Differences are candidate minus submitted, pooled over seeds 42 + 777 (2000 SA episodes,
+2000 MA scenarios), mean [95% BCa CI]; computed by `runs/diag/judge18.py` (main repo).
+
+| Candidate | MA failures /1000 | Score | MA time [s] | SA time [s] | Rule 1 | Rule 2 |
+| --- | --- | --- | --- | --- | --- | --- |
+| soup4 | -1.0 [-11.0, +8.5] | +0.00 [-0.14, +0.15] | -1.6 [-3.5, +0.2] | +2.6 [-2.6, +8.2] | no | yes |
+| ens4 | +0.5 [-9.0, +10.0] | +0.01 [-0.15, +0.17] | -1.3 [-3.1, +0.5] | +2.9 [-2.4, +9.1] | no | yes |
+| ft_hard | -3.0 [-13.0, +6.0] | -0.07 [-0.25, +0.10] | +1.5 [-0.3, +3.4] | +10.6 [+4.3, +17.7] | no | yes |
+| ft_time | +3.5 [-6.5, +14.5] | -0.02 [-0.18, +0.14] | -3.2 [-5.2, -1.2] | -3.0 [-8.7, +3.0] | no | yes |
+| ft_cont | +3.0 [-7.0, +14.0] | -0.14 [-0.33, +0.04] | -0.6 [-2.5, +1.2] | +7.1 [+1.8, +13.0] | no | yes |
+
+Not part of the decision (exploratory, not corrected for multiplicity):
+
+- Against the equal-compute control ft_cont (`runs/diag/vs_control18.py`), the doubled time
+  cost shortens flights, MA -2.6 s [-4.5, -0.7] and SA -10.1 s [-16.4, -3.8], with score
+  +0.12 [+0.01, +0.25] and MA violations +0.004 [+0.000, +0.008] per aircraft. Hard replay vs
+  ft_cont: MA failures -6.0 [-17.0, +4.0], MA time +2.1 s [+0.2, +4.1].
+- More training alone (ft_cont) does not improve the submitted policy; SA flights get longer.
+- Of the submitted policy's 136 MA aircraft failures on seeds 42 + 777 (20,000 aircraft),
+  50 have a goal inside a restricted area (52 such aircraft in total), reachable only by an
+  entry; no candidate changes that class. The other 86 are the addressable failures
+  (`runs/diag/failure_class18.py`).
+- Test 2 (`runs/scale/ft_rev.txt`, 300 scenarios per size, 5 areas): MA goal 99.3 / 98.8 /
+  98.8 / 97.6 % at 10 / 15 / 20 / 30 aircraft, intrusions per aircraft 0.005 / 0.016 / 0.019 /
+  0.036 against fly-direct 0.84 / 1.32 / 1.75 / 2.67; SA goal 100 / 99.3 / 99.3 % at 10 / 20 /
+  30 intruders, intrusions 0.09 / 0.27 / 0.54 against 1.11 / 2.25 / 3.49.
+- Test 3 (official harness, seed 42), goal / intrusions / RA events per aircraft / time / score:
+  MA RL 99.39 % / 0.008 / 0.009 / 917 s / 90.0; direct + MVP 99.96 % / 0.004 / 0.804 / 859 s /
+  83.3; route + MVP 99.44 % / 0.098 / 0.594 / 986 s / 82.4. SA RL 99.7 % / 0.126 / 0.012 /
+  979 s / 88.5; direct + MVP 97.2 % / 0.52 / 0.84 / 1020 s / 72.7; route + MVP 95.6 % / 0.59 /
+  0.61 / 1184 s / 70.5. MVP resolves pure MA conflicts at least as well as the policy but flies
+  through restricted areas.
