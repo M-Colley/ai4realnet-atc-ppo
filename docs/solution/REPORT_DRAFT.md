@@ -26,9 +26,11 @@ indecision**.
 On the official seed-42 protocol the policy completes 99.39% of multi-agent
 flights with 0.024 safety events per aircraft, against 1.68 for a fly-direct
 baseline. It completes 99.7% of single-agent flights with 0.143 events per
-episode (1.94 for fly-direct). A failure analysis shows that most remaining
-single-agent intrusions exist at spawn, and that almost half of the
-multi-agent failures have a goal *inside* a restricted area.
+episode (1.94 for fly-direct). BlueSky's Modified Voltage Potential (MVP)
+conflict resolution along an area-free route, a classical reference, has 0.72
+and 1.33. A failure analysis shows that most remaining single-agent intrusions
+exist at spawn, and that over a third of the multi-agent failures have a goal
+*inside* a restricted area.
 
 ## 1. Problem
 
@@ -148,19 +150,26 @@ held-out checkpoint does not differ significantly on seeds 42 and 777 (score
 
 ## 5. Results (seed 42, first 1000 episodes, official harness)
 
-| Metric | SA fly-direct | SA ours | MA fly-direct | MA ours |
-| --- | ---: | ---: | ---: | ---: |
-| Goal completion rate [%] | 100.0 | 99.7 | 100.0 | 99.39 |
-| Flight time [s] | 852.0 | 978.7 | 847.7 | 916.7 |
-| Intrusion events | 1.127 | 0.126 | 0.877 | 0.008 |
-| Intrusion time [s] | 96.3 | 5.09 | 64.8 | 0.35 |
-| Restricted-area events | 0.813 | 0.012 | 0.799 | 0.009 |
-| Restricted-area time [s] | 129.9 | 0.50 | 121.7 | 0.60 |
-| Sector-exit events | 0.000 | 0.005 | 0.000 | 0.007 |
-| Time outside sector [s] | 0.0 | 0.21 | 0.0 | 0.30 |
+| Metric | SA fly-direct | SA direct + MVP | SA route + MVP | SA ours | MA fly-direct | MA direct + MVP | MA route + MVP | MA ours |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Goal completion rate [%] | 100.0 | 97.2 | 95.6 | 99.7 | 100.0 | 99.96 | 99.44 | 99.39 |
+| Flight time [s] | 852.0 | 1019.6 | 1183.9 | 978.7 | 847.7 | 858.6 | 986.3 | 916.7 |
+| Intrusion events | 1.127 | 0.519 | 0.587 | 0.126 | 0.877 | 0.004 | 0.098 | 0.008 |
+| Intrusion time [s] | 96.3 | 54.6 | 55.7 | 5.09 | 64.8 | 0.01 | 0.12 | 0.35 |
+| Restricted-area events | 0.813 | 0.836 | 0.605 | 0.012 | 0.799 | 0.804 | 0.594 | 0.009 |
+| Restricted-area time [s] | 129.9 | 134.0 | 31.5 | 0.50 | 121.7 | 122.6 | 39.0 | 0.60 |
+| Sector-exit events | 0.000 | 0.076 | 0.135 | 0.005 | 0.000 | 0.001 | 0.030 | 0.007 |
+| Time outside sector [s] | 0.0 | 71.7 | 104.4 | 0.21 | 0.0 | 0.9 | 8.6 | 0.30 |
 
 Fly-direct is the stock env with the zero action (the harness default). The
 multi-agent figures are per agent-episode, over 10,000 agent-episodes.
+
+The MVP columns are a classical reference (`atc_agent.mvp_baseline`), not a
+competition entry: the rules require `RESO OFF` for the agent.
+- Each aircraft flies at its initial speed towards its goal (*direct*) or towards a point 5 NM along the area-free grid route that is also the policy's route hint (*route*).
+- BlueSky's state-based conflict detection (5 NM, 300 s look-ahead) and MVP resolution (heading and speed) take over during a conflict.
+- In multi-agent scenarios every aircraft resolves, so resolution is cooperative. In single-agent scenarios only the agent resolves and the intruders fly their routes.
+- MVP knows nothing about restricted areas or the sector.
 
 **What each stage contributed.**
 - Every checkpoint is flown on the same 1000 + 1000 seed-42 scenarios.
@@ -199,6 +208,53 @@ that continues the geodesic stage for the same 185M steps without the costs
 flies 2.6 s [0.8, 4.6] (MA) and 7.5 s [1.9, 13.4] (SA) longer than the
 submitted policy.
 
+**Classical reference.** MVP has perfect state information, and in multi-agent
+scenarios every aircraft resolves cooperatively.
+- Along the area-free route it completes as many multi-agent flights as the policy (99.44% vs 99.39%). It has 0.72 safety events per aircraft against the policy's 0.024, mostly restricted-area entries, because its manoeuvres ignore the areas.
+- Flown direct, MVP has fewer intrusions than the policy (0.004 vs 0.008) and 99.96% completion, at 0.80 restricted-area events per aircraft.
+- Against the non-cooperative single-agent intruders it leaves 4–5 times the policy's intrusions and fails 2.8–4.4% of flights.
+
+**Denser traffic** (`atc_agent.scale_eval`, BlueSky-Batch, 300 scenarios per size, 5 restricted areas, submitted policy).
+- The policy observes at most ten aircraft tokens (the nearest by predicted miss distance), so with more traffic it never sees all of it.
+
+| Track | Traffic | Goal [%] | Intrusions (fly-direct) | RA events | Flight time [s] |
+| --- | --- | ---: | ---: | ---: | ---: |
+| MA | 10 aircraft | 99.3 | 0.005 (0.84) | 0.013 | 930 |
+| MA | 15 aircraft | 98.8 | 0.016 (1.32) | 0.025 | 957 |
+| MA | 20 aircraft | 98.8 | 0.019 (1.75) | 0.023 | 970 |
+| MA | 30 aircraft | 97.6 | 0.036 (2.67) | 0.062 | 1017 |
+| SA | 10 intruders | 100.0 | 0.09 (1.11) | 0.013 | 991 |
+| SA | 20 intruders | 99.3 | 0.27 (2.25) | 0.043 | 1131 |
+| SA | 30 intruders | 99.3 | 0.54 (3.49) | 0.057 | 1265 |
+
+Training used 10 aircraft (MA) and 10–14 intruders (SA). With three times the
+density the policy degrades gradually: it still resolves 98.7% (MA) and 85%
+(SA) of the fly-direct intrusions.
+
+**Pre-registered final experiments** (`docs/solution/EXPERIMENTS_2026-11.md`, fixed 2026-11-15 before any result).
+- Five candidates were tested against the submitted policy:
+  - a uniform weight average of the four last-stage runs (ours and seed repeats 11–13);
+  - their decision-time ensemble, which averages action probabilities;
+  - 150M further steps with prioritized replay of 576 mined hard scenarios (315 SA, 261 MA; none with a goal inside a restricted area);
+  - 150M further steps with the time cost doubled (0.02 per second);
+  - an unchanged 150M-step continuation as the control.
+- A candidate would replace the submission only on a pooled seed 42 + 777 gain in MA failures (or score), with no safety regression and confirmation on seed 9001.
+- None qualified, so the submission is unchanged.
+
+| Candidate | Δ MA failures /1000 | Δ score | Δ MA time [s] | Δ SA time [s] |
+| --- | --- | --- | --- | --- |
+| weight average | −1.0 [−11.0, +8.5] | +0.00 [−0.14, +0.15] | −1.6 [−3.5, +0.2] | +2.6 [−2.6, +8.2] |
+| ensemble | +0.5 [−9.0, +10.0] | +0.01 [−0.15, +0.17] | −1.3 [−3.1, +0.5] | +2.9 [−2.4, +9.1] |
+| hard replay | −3.0 [−13.0, +6.0] | −0.07 [−0.25, +0.10] | +1.5 [−0.3, +3.4] | +10.6 [+4.3, +17.7] |
+| doubled time cost | +3.5 [−6.5, +14.5] | −0.02 [−0.18, +0.14] | −3.2 [−5.2, −1.2] | −3.0 [−8.7, +3.0] |
+| unchanged control | +3.0 [−7.0, +14.0] | −0.14 [−0.33, +0.04] | −0.6 [−2.5, +1.2] | +7.1 [+1.8, +13.0] |
+
+Exploratory comparisons, not corrected for multiplicity:
+- Against the equal-compute control, the doubled time cost shortens MA flights by 2.6 s [0.7, 4.5] and SA flights by 10.1 s [3.8, 16.4]. It raises the score by 0.12 [0.01, 0.25] and adds 0.004 [0.000, 0.008] MA violations per aircraft.
+- Hard replay against the control: −6 [−17, +4] MA failures per 1000 scenarios.
+- More training alone does not improve the submitted policy, and SA flights get longer.
+- Earlier, averaging two checkpoints had added MA failures. Averaging all four last-stage runs does not degrade the policy.
+
 ## 6. Failure analysis
 
 **Single-agent violations are mostly unavoidable** (`atc_agent.diagnose_sa`, submitted policy, 1000 episodes of seed 777).
@@ -207,12 +263,13 @@ submitted policy.
 - Of the 20 later ones, an escape was found for 5. The same search finds escapes for 9/15 restricted-area and 4/6 sector-exit events.
 - All 138 control replays reproduce the original metrics exactly.
 
-**Every failure is a timeout; almost half of the multi-agent ones are infeasible goals.**
+**Every failure is a timeout; over a third of the multi-agent ones are infeasible goals.**
 - All 3 single-agent and 61 multi-agent failures run out of the 3000 s budget.
 - 29 of 10,000 multi-agent goals on seed 42 lie *inside* a restricted area. The policy reaches one of them, after entering the area.
   - **23** lie deeper than the 5 km capture radius, so they can be reached only by entering the area.
   - **6** are shallower and could be captured from outside.
 - This is a property of the generator: on 50k fresh multi-agent agent-episodes, 128 of the 1185M checkpoint's 333 failures have their goal inside an area (single-agent: 22 of 86 on 20k episodes; seed 42, submitted policy: 1 of 3).
+- For the submitted policy on seeds 42 and 777 (20,000 MA aircraft), 50 of its 136 MA failures have a goal inside an area; 52 aircraft have such a goal. None of the pre-registered candidates reduces this class.
 
 | MA failure class, seed 42 (all timeouts) | 1185M | submitted |
 | --- | ---: | ---: |
