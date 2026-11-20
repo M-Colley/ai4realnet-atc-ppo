@@ -24,6 +24,8 @@ is documented in [`atc_agent/README.md`](atc_agent/README.md).
 | `results/parent/` | The parent's official and fast results on the same stream. |
 | `results/fast_s777_{sa,ma}.csv`, `results/parent/fast_s777_*` | Both policies on a second stream (seed 777) in BlueSky-Batch, for the pooled paired comparisons. |
 | `geo_init/` | Start of the ft_geo stage (time-aware 1.07B-step model with the route-hint inputs added, plus its safety multipliers); used by the seed repeats. |
+| `results/fast_s9001_{sa,ma}.csv` | The submitted policy on the confirmation stream (seed 9001) of the final experiments. |
+| `results/final_experiments/<candidate>/` | The five pre-registered candidates (below): per-episode CSVs on seeds 42, 777 and 9001; for the three training candidates also their arguments and exact training command lines (every resume); for the hard-replay candidate the mining rows its replay pool is built from. |
 
 Official harness, seed 42 (`scripts/evaluate_competition.py`):
 
@@ -123,6 +125,38 @@ Training holds ~40 GiB of RAM with the default 26 simulation workers. Keep `--wo
 on smaller machines (it is only slower), so each PPO rollout has the original size
 (26 x 88 seats x 128 steps). Check the pipeline first with `--smoke` (a few minutes).
 
+## Final experiments (pre-registered)
+
+`docs/solution/EXPERIMENTS_2026-11.md` fixed five candidates and a decision rule on
+2026-11-15, before any result:
+- `soup4`: a uniform weight average of the submitted policy and the three seed repeats' ends;
+- `ens4`: the same four policies as a decision-time ensemble (`fast_eval --ensemble`);
+- three 150M-step continuations of the submitted policy (training seed 20):
+  - `ft_hard`: prioritized replay of mined hard scenarios;
+  - `ft_time`: a doubled time cost;
+  - `ft_cont`: unchanged, the control.
+
+None qualified, so the submitted policy is unchanged. This command applies the rule to the
+shipped CSVs: paired per unit, pooled over seeds 42 and 777, confirmation on seed 9001. It
+also reports the exploratory comparisons against the control and the MA failures split by
+whether the goal lies inside a restricted area. Output goes to `runs/final_experiments.json`.
+
+```bash
+uv run --no-sync python -m scripts.final_experiments
+```
+
+To re-create a candidate:
+- **Training candidates:** each starts from the submitted policy with its safety multipliers, which `--resume` reads from a `train_state.json` next to the zip:
+
+  ```bash
+  mkdir -p runs/final_init && cp submission/policy.zip runs/final_init/init.zip
+  cp submission/results/final_experiments/train_state.json runs/final_init/
+  ```
+
+  Then run the first line of the candidate's `train_commands.txt` (after `python`), with `--resume runs/final_init/init.zip`. argparse keeps the last occurrence of a repeated option. Later lines are resumes after the shared PC needed the memory. Worker counts changed between resumes (26, 13 or 8 workers), always with the same 2288 seats per rollout.
+- **Replay pool for `ft_hard`:** rebuild it with `python -m scripts.final_experiments --build-pool runs/pool/pool_hard_v2.pkl`.
+- **Candidate evaluations:** `python -m atc_agent.fast_eval --model <final.zip> --env both --episodes 1000 --seed {42,777,9001} --out <prefix>`.
+
 ## How the submitted policy was trained
 
 | Stage | Steps (cumulative) | Code | What changed |
@@ -148,6 +182,12 @@ uv run --no-sync python -m atc_agent.detour_diag --model submission/policy.zip -
 uv run --no-sync python -m atc_agent.failure_diag --model submission/policy.zip --csv submission/results/fast_ma.csv \
     --agents-csv runs/diag/detour_agents.csv --out runs/diag/fail
 uv run --no-sync python -m atc_agent.diagnose_sa --model submission/policy.zip --out runs/diag/sa
+# classical reference in Table 1: BlueSky MVP along the area-free route (or --nav direct), official harness
+uv run --no-sync python -m atc_agent.mvp_baseline --env ma --nav route --out runs/mvp/route_ma.csv
+uv run --no-sync python -m atc_agent.mvp_baseline --env sa --nav route --out runs/mvp/route_sa.csv
+# denser traffic (report Sec. 5)
+uv run --no-sync python -m atc_agent.scale_eval --model submission/policy.zip --agents 10 15 20 30 \
+    --intruders 10 20 30 --n 300 --out runs/scale/ft_rev
 # the report (TeX Live or TinyTeX)
 cd docs/solution/report && latexmk -pdf report.tex
 ```
