@@ -76,7 +76,8 @@ Freeze: 2026-11-25. Official-harness re-run, video and report update follow the 
 
 Decision: no candidate meets rule 1, so the submission stays (`runs/ft_rev/final.zip`).
 Differences are candidate minus submitted, pooled over seeds 42 + 777 (2000 SA episodes,
-2000 MA scenarios), mean [95% BCa CI]; computed by `runs/diag/judge18.py` (main repo).
+2000 MA scenarios), mean [95% BCa CI]. All numbers below are reproduced from the per-episode
+CSVs shipped on branch `submission` by `python -m scripts.final_experiments`.
 
 | Candidate | MA failures /1000 | Score | MA time [s] | SA time [s] | Rule 1 | Rule 2 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -88,7 +89,7 @@ Differences are candidate minus submitted, pooled over seeds 42 + 777 (2000 SA e
 
 Not part of the decision (exploratory, not corrected for multiplicity):
 
-- Against the equal-compute control ft_cont (`runs/diag/vs_control18.py`), the doubled time
+- Against the equal-compute control ft_cont, the doubled time
   cost shortens flights, MA -2.6 s [-4.5, -0.7] and SA -10.1 s [-16.4, -3.8], with score
   +0.12 [+0.01, +0.25] and MA violations +0.004 [+0.000, +0.008] per aircraft. Hard replay vs
   ft_cont: MA failures -6.0 [-17.0, +4.0], MA time +2.1 s [+0.2, +4.1].
@@ -96,8 +97,8 @@ Not part of the decision (exploratory, not corrected for multiplicity):
 - Of the submitted policy's 136 MA aircraft failures on seeds 42 + 777 (20,000 aircraft),
   50 have a goal inside a restricted area (52 such aircraft in total), reachable only by an
   entry; no candidate changes that class. The other 86 are the addressable failures
-  (`runs/diag/failure_class18.py`).
-- Test 2 (`runs/scale/ft_rev.txt`, 300 scenarios per size, 5 areas): MA goal 99.3 / 98.8 /
+  (computed by the same script).
+- Test 2 (`atc_agent.scale_eval`, 300 scenarios per size, 5 areas): MA goal 99.3 / 98.8 /
   98.8 / 97.6 % at 10 / 15 / 20 / 30 aircraft, intrusions per aircraft 0.005 / 0.016 / 0.019 /
   0.036 against fly-direct 0.84 / 1.32 / 1.75 / 2.67; SA goal 100 / 99.3 / 99.3 % at 10 / 20 /
   30 intruders, intrusions 0.09 / 0.27 / 0.54 against 1.11 / 2.25 / 3.49.
