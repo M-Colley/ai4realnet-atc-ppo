@@ -19,6 +19,7 @@ import bluesky as bs  # noqa: E402
 from atc_agent.batched_env import GOAL_MARGIN_KM  # noqa: E402
 from atc_agent.fast_eval import FastEvaluator  # noqa: E402
 from atc_agent.features import scenario_geometry, latlon_to_nm  # noqa: E402
+from atc_agent.plot_style import REPORT_RC  # noqa: E402
 
 
 def replay(predict, scens, kind, n_agents=10):
@@ -68,6 +69,13 @@ def replay(predict, scens, kind, n_agents=10):
 
 
 def plot(scens, results, titles, path, ncols=4, size=4.2, legend=True):
+    """Starts: triangles; goals: circles of the capture radius (green reached, black not); paths: dots
+    every decision coloured by time, red line for a timeout; other traffic grey; RAs shaded."""
+    with plt.rc_context(REPORT_RC):
+        _plot(scens, results, titles, path, ncols, size, legend)
+
+
+def _plot(scens, results, titles, path, ncols, size, legend):
     n = len(scens)
     nrows = int(np.ceil(n / ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(size * ncols, size * nrows), squeeze=False)
@@ -96,14 +104,15 @@ def plot(scens, results, titles, path, ncols=4, size=4.2, legend=True):
             ax.add_patch(plt.Circle((g[1], g[0]), GOAL_MARGIN_KM / 1.852, fill=False,
                                     color="black" if failed else "tab:green", lw=1.2, zorder=4))
         ax.set_aspect("equal")
-        ax.set_title(title, fontsize=8)
-        ax.tick_params(labelsize=6)
+        ax.set_title(title, fontsize=7.5)
+        ax.set_xlabel("east [NM]")
+        if ax in axes[:, 0]:
+            ax.set_ylabel("north [NM]")
     if legend:
-        fig.suptitle("east [NM] vs north [NM]; own path dots coloured by time (dark = early); "
-                     "grey = other traffic; shaded = restricted areas; circle = goal; red path / black circle = timeout",
-                     fontsize=9)
+        fig.suptitle("own path dots coloured by time (dark = early); grey = other traffic; shaded = restricted "
+                     "areas; triangle = start; circle = goal; red path / black circle = timeout", fontsize=8)
     fig.tight_layout()
-    fig.savefig(path, dpi=110)
+    fig.savefig(path, dpi=300, bbox_inches="tight", pad_inches=0.02)
 
 
 def main():

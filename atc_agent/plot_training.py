@@ -14,11 +14,14 @@ broken at 1.0B steps: the right panels show the fine-tunes at a finer scale.
 
 import argparse
 import json
+import os
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+
+from atc_agent.plot_style import GRID, MUTED, REPORT_RC  # noqa: E402
 
 # (run dir, first step kept, last step kept); steps are global across resumes
 LINEAGE = [("runs/main", 0, 1.0005e9), ("runs/ft_ta", 1.0e9, 1.0705e9), ("runs/ft_geo", 1.07e9, 1.135e9),
@@ -29,8 +32,9 @@ CONTROL2 = [("runs/ft_geo_r3", 1.1853e9, 1.371e9)]     # same steps as ft_rev, w
 SPLIT, GEO_START, REV_START = 1.0e9, 1.0704e9, 1.1852e9
 DASH, DOT = (0, (3, 1.5)), (0, (1, 1.2))
 SERIES = {"sa10": ("single-agent", "#2a78d6"), "ma_orig": ("multi-agent", "#eb6834")}
-LAMBDAS = [("lam_intr", "intrusion", "-"), ("lam_ra", "restricted area", "--"), ("lam_sec", "sector exit", ":")]
-INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
+LAMBDAS = [("lam_intr", "intrusion", "#6a3d9a"), ("lam_ra", "restricted area", "#1b7837"),
+           ("lam_sec", "sector exit", "#8c6d31")]
+STAGE_LINE = "#b5b4b0"
 
 
 def load(segments):
@@ -63,15 +67,16 @@ def windowed(rows, key, window):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", required=True)
-    p.add_argument("--main-run", default="runs/main", help="directory of the 1B-step main run")
+    p.add_argument("--main-run", default="runs/main", help="directory of the 1000M-step main run")
+    p.add_argument("--runs", default="runs", help="directory holding the fine-tune runs (ft_ta, ft_geo, ...)")
     a = p.parse_args()
-    LINEAGE[0] = (a.main_run,) + LINEAGE[0][1:]
-    plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "STIXGeneral"],
-                         "mathtext.fontset": "stix", "font.size": 7, "axes.edgecolor": MUTED,
-                         "axes.labelcolor": INK, "xtick.color": MUTED, "ytick.color": MUTED,
-                         "axes.linewidth": 0.5, "xtick.major.width": 0.5, "ytick.major.width": 0.5})
-    lin, ctl, ctl2 = load(LINEAGE), load(CONTROL), load(CONTROL2)
-    fig, axes = plt.subplots(4, 2, figsize=(3.4, 3.9), sharey="row",
+    plt.rcParams.update(REPORT_RC)
+
+    def at(segs):
+        return [(os.path.join(a.runs, os.path.basename(r)), lo, hi) for r, lo, hi in segs]
+    lin = load([(a.main_run,) + LINEAGE[0][1:]] + at(LINEAGE[1:]))
+    ctl, ctl2 = load(at(CONTROL)), load(at(CONTROL2))
+    fig, axes = plt.subplots(4, 2, figsize=(3.4, 3.15), sharey="row",
                              gridspec_kw=dict(width_ratios=[1.0, 1.0], wspace=0.06, hspace=0.18))
     rows = [("timeout", "timeouts [%]", 100.0, False), ("violations", "violations / flight", 1.0, True),
             ("flight_time", "flight time [s]", 1.0, False)]
@@ -82,16 +87,16 @@ def main():
                     continue
                 t, m = windowed(data, key, window)
                 for r, (mk, _, scale, _) in enumerate(rows):
-                    axes[r, col].plot(t / 1e9, m[mk] * scale, color=color, ls=ls, lw=lw,
+                    axes[r, col].plot(t / 1e6, m[mk] * scale, color=color, ls=ls, lw=lw,
                                       label=label if (r == 0 and col == 1 and data is lin) else None)
-        for lk, label, ls in LAMBDAS:
-            for data, lw in ((lin, 0.9),) + (((ctl, 0.5),) if col == 1 else ()):
-                t = np.array([r["t"] for r in data]) / 1e9
-                axes[3, col].plot(t, [r["lam"][lk] for r in data], color=INK if data is lin else MUTED,
-                                  ls=ls, lw=lw, label=label if (col == 0 and data is lin) else None)
+        for lk, label, color in LAMBDAS:
+            for data, ls, lw in ((lin, "-", 0.9),) + (((ctl, DASH, 0.7),) if col == 1 else ()):
+                t = np.array([r["t"] for r in data]) / 1e6
+                axes[3, col].plot(t, [r["lam"][lk] for r in data], color=color, ls=ls, lw=lw,
+                                  label=label if (col == 0 and data is lin) else None)
         for r in range(4):
             ax = axes[r, col]
-            ax.set_xlim(xlim[0] / 1e9, xlim[1] / 1e9)
+            ax.set_xlim(xlim[0] / 1e6, xlim[1] / 1e6)
             ax.grid(True, color=GRID, lw=0.4)
             ax.set_axisbelow(True)
             ax.spines[["top", "right"]].set_visible(False)
@@ -99,7 +104,7 @@ def main():
                 ax.tick_params(labelbottom=False)
             if col == 1:
                 for x in (GEO_START, REV_START):
-                    ax.axvline(x / 1e9, color=MUTED, lw=0.5, ls=":")
+                    ax.axvline(x / 1e6, color=STAGE_LINE, lw=0.6, ls="-", zorder=0)
                 ax.spines["left"].set_visible(False)
                 ax.tick_params(left=False)
     for r, (_, ylabel, _, logy) in enumerate(rows):
@@ -107,17 +112,17 @@ def main():
         if logy:
             axes[r, 0].set_yscale("log")
     axes[3, 0].set_ylabel(r"multiplier $\lambda$")
-    axes[3, 0].set_xlabel("training steps [$10^9$]")
-    axes[3, 1].set_xlabel("fine-tunes [$10^9$]")
-    axes[3, 0].set_xticks([0, 0.25, 0.5, 0.75])
-    axes[3, 1].set_xticks([1.0, 1.1, 1.2, 1.3])
+    axes[3, 0].set_xlabel("training steps [M]")
+    axes[3, 1].set_xlabel("fine-tunes [M]")
+    axes[3, 0].set_xticks([0, 250, 500, 750])
+    axes[3, 1].set_xticks([1000, 1100, 1200, 1300])
     axes[0, 0].set_ylim(bottom=0)
     axes[0, 0].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    axes[0, 1].text(1.035, 1.02, "time-\naware", transform=axes[0, 1].get_xaxis_transform(), ha="center",
+    axes[0, 1].text(1035, 1.02, "time-\naware", transform=axes[0, 1].get_xaxis_transform(), ha="center",
                     va="bottom", color=MUTED, fontsize=6)
-    axes[0, 1].text(1.128, 1.02, "geodesic", transform=axes[0, 1].get_xaxis_transform(), ha="center",
+    axes[0, 1].text(1128, 1.02, "geodesic", transform=axes[0, 1].get_xaxis_transform(), ha="center",
                     va="bottom", color=MUTED, fontsize=6)
-    axes[0, 1].text(1.28, 1.02, "+indecision\ncosts", transform=axes[0, 1].get_xaxis_transform(),
+    axes[0, 1].text(1280, 1.02, "+indecision\ncosts", transform=axes[0, 1].get_xaxis_transform(),
                     ha="center", va="bottom", color=MUTED, fontsize=6)
     handles, labels = axes[0, 1].get_legend_handles_labels()
     handles += [plt.Line2D([], [], color=MUTED, ls=DASH, lw=0.7), plt.Line2D([], [], color=MUTED, ls=DOT, lw=0.8)]

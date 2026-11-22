@@ -1,4 +1,4 @@
-# Exact Batched Simulation, Intent-Aware Entity Transformers and Failure-Driven Fine-Tuning for Safe Multi-Agent Air Traffic Control
+# Batched Simulation, Intent-Aware Entity Transformers and Failure-Driven Fine-Tuning for Safe Multi-Agent Air Traffic Control
 
 *Markdown draft of the technical report. The submitted version is the LaTeX
 source in `report/report.tex`; this draft follows it. Numbers marked TODO are
@@ -11,9 +11,9 @@ We present a reinforcement-learning controller for the BlueSky-Gym ATC
 competition. It solves the single-agent task (one aircraft among ten scripted
 intruders) and the multi-agent task (ten learning aircraft) with **one shared
 policy**. (i) **BlueSky-Batch** runs hundreds of independent scenarios inside
-one BlueSky process. With conflict resolution off, as the rules require, this
-is *exactly* the official environment (equivalence-tested), at ~30x the
-throughput. One desktop PC trains 1B steps in 33 h. (ii) An **intent-aware
+one BlueSky process. With conflict resolution off, as the rules require, it
+reproduces the official environment (observations within 1e-5, identical scored
+metrics for the submitted policy) at 31x the throughput. One desktop PC trains 1B steps in 33 h. (ii) An **intent-aware
 entity transformer** observes ranked traffic tokens with closest-approach
 features and intent, obstacle tokens, a lidar and an obstacle-aware route hint.
 (iii) A **goal-relative categorical action space** makes "fly direct" the
@@ -43,7 +43,7 @@ and sector-exit events and durations. No scalar score is defined, so we report
 all metrics, and for checkpoint selection only we use
 100·goal − 10·events − 0.01·flight time (one event weighs as much as 1000 s).
 
-## 2. BlueSky-Batch: exact high-throughput simulation
+## 2. BlueSky-Batch: high-throughput simulation
 
 *Observation.* One `bs.sim.step()` of the official env costs ~1.8 ms for 11
 aircraft, and almost all of that is fixed per-call overhead: 1100 aircraft
@@ -53,13 +53,13 @@ steps/s per core.
 *Method.* A slot holds one scenario from the official `ScenarioGenerator`, and
 many slots share one simulator. Aircraft are created with the same `traf.cre`
 calls and intruder routes with the same `ADDWPT` stack commands. Commands go
-through BlueSky's own HDG/SPD autopilot functions, vectorised. The nine metrics
+through BlueSky's own HDG/SPD autopilot functions, vectorised. The eight metrics
 are recomputed every simulated second with the official `kwikqdrdist`, plus a
 point-in-polygon test in the local NM frame, which is affine-equivalent to
 BlueSky's. Multi-agent slots remove an aircraft at goal capture, as the
 official env does.
 
-*Exactness.* `tests/test_equivalence.py` flies identical scenarios and actions
+*Equivalence.* `tests/test_equivalence.py` flies identical scenarios and actions
 in the official environments (with our hooks) and in BlueSky-Batch, with other
 scenarios sharing the simulator. Observations agree to < 1e-5 at every step and
 all scored metrics are identical, on both tracks. Our batched evaluator
@@ -90,7 +90,7 @@ processes (custom SB3 `VecEnv`) on an i7-14700K with an RTX 5080, PPO trains at
 
 **Action.** `MultiDiscrete([17, 6])`.
 - *Heading:* bearing-to-goal + {0, ±5, ±12, ±22, ±35, ±50, ±70, ±90, ±120}°.
-- *Speed:* CAS in {110, 125, 140, 150, 157, 163} m/s. 163 m/s is the OpenAP A320 VMO at the competition altitude.
+- *Speed:* CAS in {110, 125, 140, 150, 157, 163} m/s. 163 m/s (317 kt) is the A320's en-route CAS limit (`vmaxer`) in BlueSky's OpenAP performance model; at the competition's 350 m altitude it is 322 kt true airspeed.
 
 Decisions are made every 10 s. A categorical head represents bimodal avoidance,
 which a Gaussian would average into a path straight through the conflict.

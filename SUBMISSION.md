@@ -24,7 +24,9 @@ is documented in [`atc_agent/README.md`](atc_agent/README.md).
 | `results/parent/` | The parent's official and fast results on the same stream. |
 | `results/fast_s777_{sa,ma}.csv`, `results/parent/fast_s777_*` | Both policies on a second stream (seed 777) in BlueSky-Batch, for the pooled paired comparisons. |
 | `geo_init/` | Start of the ft_geo stage (time-aware 1.07B-step model with the route-hint inputs added, plus its safety multipliers); used by the seed repeats. |
-| `results/fast_s9001_{sa,ma}.csv` | The submitted policy on the confirmation stream (seed 9001) of the final experiments. |
+| `results/fast_s9001_{sa,ma}.csv` | The submitted policy on the confirmation stream (seed 9001) of the final experiments; no decision used it (report Table 1). |
+| `results/reference/` | Official-harness CSVs (seed 42) of fly-direct (`direct_*`) and of BlueSky's MVP conflict resolution along the area-free route (`mvp_route_*`) or flown direct (`mvp_direct_*`). |
+| `results/geo_init/` | The 1070M checkpoint (`geo_init/`, start of the geodesic stage) in BlueSky-Batch on seeds 42 and 777. |
 | `results/final_experiments/<candidate>/` | The five pre-registered candidates (below): per-episode CSVs on seeds 42, 777 and 9001; for the three training candidates also their arguments and exact training command lines (every resume); for the hard-replay candidate the mining rows its replay pool is built from. |
 
 Official harness, seed 42 (`scripts/evaluate_competition.py`):
@@ -175,8 +177,14 @@ available on request.
 ```bash
 # picks 5 of 300 seeds by a fixed rule, records them in the official MA env (MP4 needs ffmpeg)
 uv run --no-sync python -m atc_agent.select_video --model submission/policy.zip --out runs/video/ma
-# trajectories of chosen seed-42 scenarios (report Fig. 2)
-uv run --no-sync python -m atc_agent.plot_flights --model submission/policy.zip --seed 42 --kind ma --scenarios 261,788 --out runs/diag/flights.png
+# report Table 1 (CIs, seed 9001) from the shipped CSVs; report Fig. 2
+uv run --no-sync python -m scripts.report_table1
+uv run --no-sync python -m scripts.report_fig_trajectories
+# report Fig. 3 from the training logs (not in the repository; available on request)
+uv run --no-sync python -m atc_agent.plot_training --runs <fine-tune runs dir> --main-run <main run dir> \
+    --out docs/solution/report/figures/training.pdf
+# report Sec. 7: geodesic stage vs its start (1070M) in the submitted lineage and the seed repeats
+uv run --no-sync python -m scripts.geodesic_replication --seeds 11 12 13
 # diagnostics used in the report
 uv run --no-sync python -m atc_agent.detour_diag --model submission/policy.zip --check submission/results/fast_ma.csv --out runs/diag/detour
 uv run --no-sync python -m atc_agent.failure_diag --model submission/policy.zip --csv submission/results/fast_ma.csv \
