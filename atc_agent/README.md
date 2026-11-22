@@ -24,13 +24,13 @@ scenarios inside one BlueSky process.
 
 ## Setup on the training PC
 
-The code lives in the private repo `M-Colley/ai4realnet-atc-competition`
-(branch `main`, built on top of the official `AI4REAL-NET-Competition`
+The code lives in `M-Colley/ai4realnet-atc-ppo`
+(built on top of the official `AI4REAL-NET-Competition`
 branch). Linux and Windows both work (workers use `forkserver` / `spawn`).
 
 ```bash
-gh repo clone M-Colley/ai4realnet-atc-competition
-cd ai4realnet-atc-competition
+gh repo clone M-Colley/ai4realnet-atc-ppo
+cd ai4realnet-atc-ppo
 git remote add upstream https://github.com/TUDelft-CNS-ATM/bluesky-gym.git   # to pull organiser updates
 uv sync
 # GPU build of torch (the lockfile pins the CPU wheel). cu130 needs an NVIDIA driver >= 580;

@@ -1,3 +1,8 @@
+> Team MATCH's entry to the AI4REALNET BlueSky-Gym ATC competition, built on the official
+> `AI4REAL-NET-Competition` branch of [BlueSky-Gym](https://github.com/TUDelft-CNS-ATM/bluesky-gym).
+> Start with [SUBMISSION.md](SUBMISSION.md) (submitted policy, results, evaluation and reproduction)
+> and [atc_agent/README.md](atc_agent/README.md) (agent code). The BlueSky-Gym README follows.
+
 # BlueSky-Gym
 A gymnasium style library for standardized Reinforcement Learning research in Air Traffic Management developed in Python.
 Built on [BlueSky](https://github.com/TUDelft-CNS-ATM/bluesky) and The Farama Foundation's [Gymnasium](https://github.com/Farama-Foundation/Gymnasium)

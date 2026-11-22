@@ -1,7 +1,7 @@
 # Team MATCH — AI4REALNET BlueSky-Gym ATC competition entry
 
-Mark Colley, University College London. Branch `submission` of the private repository
-`M-Colley/ai4realnet-atc-competition` (built on the official `AI4REAL-NET-Competition`
+Mark Colley, University College London. Repository
+[`M-Colley/ai4realnet-atc-ppo`](https://github.com/M-Colley/ai4realnet-atc-ppo) (built on the official `AI4REAL-NET-Competition`
 branch of BlueSky-Gym).
 
 One reinforcement-learning policy flies both tracks: a PPO-trained entity-transformer
@@ -51,8 +51,8 @@ place intruders within 5 NM of the start (`atc_agent.diagnose_sa`).
 Needs [uv](https://docs.astral.sh/uv/) and Python 3.12. Linux and Windows both work.
 
 ```bash
-git clone -b submission https://github.com/M-Colley/ai4realnet-atc-competition.git
-cd ai4realnet-atc-competition
+git clone https://github.com/M-Colley/ai4realnet-atc-ppo.git
+cd ai4realnet-atc-ppo
 uv sync --frozen
 ```
 

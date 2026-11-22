@@ -77,7 +77,7 @@ Freeze: 2026-11-25. Official-harness re-run, video and report update follow the 
 Decision: no candidate meets rule 1, so the submission stays (`runs/ft_rev/final.zip`).
 Differences are candidate minus submitted, pooled over seeds 42 + 777 (2000 SA episodes,
 2000 MA scenarios), mean [95% BCa CI]. All numbers below are reproduced from the per-episode
-CSVs shipped on branch `submission` by `python -m scripts.final_experiments`.
+CSVs shipped in `M-Colley/ai4realnet-atc-ppo` by `python -m scripts.final_experiments`.
 
 | Candidate | MA failures /1000 | Score | MA time [s] | SA time [s] | Rule 1 | Rule 2 |
 | --- | --- | --- | --- | --- | --- | --- |
