@@ -13,6 +13,7 @@ broken at 1.0B steps: the right panels show the fine-tunes at a finer scale.
 """
 
 import argparse
+import gzip
 import json
 import os
 
@@ -40,7 +41,8 @@ STAGE_LINE = "#b5b4b0"
 def load(segments):
     rows = []
     for run, lo, hi in segments:
-        with open(f"{run}/progress.jsonl") as f:
+        path = f"{run}/progress.jsonl"
+        with (open(path) if os.path.exists(path) else gzip.open(path + ".gz", "rt")) as f:
             rows += [r for r in map(json.loads, f) if lo <= r["t"] <= hi]
     return sorted(rows, key=lambda r: r["t"])
 

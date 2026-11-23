@@ -26,6 +26,7 @@ is documented in [`atc_agent/README.md`](atc_agent/README.md).
 | `geo_init/` | Start of the ft_geo stage (time-aware 1.07B-step model with the route-hint inputs added, plus its safety multipliers); used by the seed repeats. |
 | `results/fast_s9001_{sa,ma}.csv` | The submitted policy on the confirmation stream (seed 9001) of the final experiments; no decision used it (report Table 1). |
 | `results/reference/` | Official-harness CSVs (seed 42) of fly-direct (`direct_*`) and of BlueSky's MVP conflict resolution along the area-free route (`mvp_route_*`) or flown direct (`mvp_direct_*`). |
+| `results/training_logs/` | Gzipped per-update training logs (`progress.jsonl`) of the main run, the fine-tune stages and the two controls (`ft_ta` after 1070M, `ft_geo_r3`); input of report Fig. 3. |
 | `results/geo_init/` | The 1070M checkpoint (`geo_init/`, start of the geodesic stage) in BlueSky-Batch on seeds 42 and 777. |
 | `results/final_experiments/<candidate>/` | The five pre-registered candidates (below): per-episode CSVs on seeds 42, 777 and 9001; for the three training candidates also their arguments and exact training command lines (every resume); for the hard-replay candidate the mining rows its replay pool is built from. |
 
@@ -169,8 +170,9 @@ To re-create a candidate:
 | ft_rev | 1.185B – 1.370B | `d96fd81` | The rest of ft_geo's schedule plus costs for flipping the heading offset directly between left and right (0.02 = 2 s per 90°) and for speed changes beyond one bin (0.01 = 1 s per extra bin). Interrupted once (host out of memory at 1.197B) and resumed (seeds 4, 5). |
 
 Every stage's arguments are recorded in `scripts/seed_repeat.py` (stage 1, ft_geo, ft_rev) and
-in the report. The training logs themselves (`runs/`) are not in the repository and are
-available on request.
+in the report. The per-update training logs of the submitted lineage and its two controls
+(`progress.jsonl`: rollout metrics and multipliers) are in `submission/results/training_logs/`;
+checkpoints other than the shipped ones are available on request.
 
 ## Video and figures
 
@@ -180,8 +182,8 @@ uv run --no-sync python -m atc_agent.select_video --model submission/policy.zip 
 # report Table 1 (CIs, seed 9001) from the shipped CSVs; report Fig. 2
 uv run --no-sync python -m scripts.report_table1
 uv run --no-sync python -m scripts.report_fig_trajectories
-# report Fig. 3 from the training logs (not in the repository; available on request)
-uv run --no-sync python -m atc_agent.plot_training --runs <fine-tune runs dir> --main-run <main run dir> \
+# report Fig. 3 from the shipped training logs
+uv run --no-sync python -m atc_agent.plot_training --runs submission/results/training_logs     --main-run submission/results/training_logs/main \
     --out docs/solution/report/figures/training.pdf
 # report Sec. 7: geodesic stage vs its start (1070M) in the submitted lineage and the seed repeats
 uv run --no-sync python -m scripts.geodesic_replication --seeds 11 12 13

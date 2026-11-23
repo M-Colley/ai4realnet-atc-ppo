@@ -30,11 +30,11 @@ and Failure-Driven Fine-Tuning for Safe Multi-Agent Air Traffic Control\vspace{-
 \begin{abstract}
 \noindent
 We present a reinforcement-learning controller for the BlueSky-Gym ATC
-competition: one shared policy flies the single-agent task (one aircraft, ten
-scripted intruders) and the multi-agent task (ten learning aircraft). \BSB
-runs hundreds of scenarios in one BlueSky process, reproduces the official
-environment to within $10^{-5}$ at 31 times its throughput, training 1000M
-steps in 33\,h on one PC. An entity transformer observes traffic with
+competition: one shared policy flies the single-agent (one aircraft, ten scripted
+intruders) and multi-agent (ten learning aircraft) tasks. \BSB
+runs many scenarios per BlueSky process and reproduces the official
+environment to within $10^{-5}$ at 31 times its per-process throughput; PPO
+trains 1000M steps in 33\,h on one PC. An entity transformer observes traffic with
 closest-approach features and intent, obstacles, lidar and an obstacle-aware
 route hint. Training uses constrained PPO on avoidable
 violations, timeouts as failures, a geodesic progress potential and indecision
@@ -66,7 +66,8 @@ One \texttt{bs.sim.step()} of the official environment costs $\sim$1.8\,ms for
 same \texttt{traf.cre} calls, intruder routes with the same \texttt{ADDWPT}
 commands, and commands go through BlueSky's own vectorised HDG/SPD autopilot
 functions. The eight metrics are recomputed every simulated second with the
-official \texttt{kwikqdrdist} and an affine-equivalent point-in-polygon test.
+official \texttt{kwikqdrdist} and a point-in-polygon test in a local frame that
+is an affine map of latitude and longitude (same inside/outside decisions).
 Because conflict resolution is off, aircraft of different slots never
 interact. A step-by-step test flies identical scenarios and actions in the
 official environments and in \BSB (with other scenarios sharing the simulator):
@@ -95,8 +96,8 @@ environment; 26 processes on an i7-14700K with an RTX~5080 train PPO
 \draw[->] (sim.east) -- ++(3mm,0) |- (ob.west);
 \draw[->] (ego.east) -- (tf); \draw[->] (ac.east) -- (tf); \draw[->] (ob.east) -- (tf);
 \draw[->] (tf) -- (hd.west); \draw[->] (tf) -- (sp.west);
-\node[box=red!6, anchor=north west, text width=105mm] (rw) at ($(sim.west |- ob.south)+(0,-4mm)$) {\textbf{PPO with reward}: time, goal, timeout (terminal), geodesic progress potential,
- safety costs $\times\lambda$, with $\lambda$ by dual ascent on \emph{avoidable} violation rates};
+\node[box=red!6, anchor=north west, text width=118mm] (rw) at ($(sim.west |- ob.south)+(0,-4mm)$) {\textbf{PPO with reward}: time, goal, timeout (terminal), geodesic progress potential,
+ indecision costs (last stage), safety costs $\times\lambda$, with $\lambda$ by dual ascent on \emph{avoidable} violation rates};
 \draw[->, dashed] (rw.north -| sim.south) -- (sim.south);
 \end{tikzpicture}
 \caption{Overview. One shared policy acts for every seat of the single-agent
@@ -152,8 +153,7 @@ $\pm70$, $\pm90$ or $\pm120^\circ$, and a CAS of
 110, 125, 140, 150, 157 or 163\,m/s (317\,kt, the A320's en-route CAS limit in
 BlueSky's OpenAP performance model~\citep{sun2020openap}; 322\,kt true airspeed
 at the competition's 350\,m altitude). A
-categorical head represents bimodal avoidance that a Gaussian would average
-into a path through the conflict.
+categorical head can represent bimodal (left or right) avoidance.
 
 \paragraph{Reward} (0.01 = one second of flight time): $-0.01$/s; $+1$ at goal
 capture; $-20$ at \emph{timeout}, terminal and not bootstrapped (with the
@@ -165,9 +165,8 @@ where they timed out); per-event (2) and per-second (0.02) costs for intrusions,
 RA and sector exits, each scaled by an adaptive multiplier $\lambda$; and small
 soft buffers (8\,NM around aircraft, 3\,NM from obstacles and the sector edge)
 and a cost per conflict predicted within 120\,s. The last stage adds two
-\emph{indecision costs}: 0.02 per 90$^\circ$ when the heading offset flips
-directly from one side of the goal bearing to the other (of the smaller of the
-two offsets), and 0.01 per speed bin changed beyond one. The shaping terms are
+\emph{indecision costs}: 0.02 per 90$^\circ$ of the smaller offset when the
+heading offset flips directly from one side of the goal bearing to the other, and 0.01 per speed bin changed beyond one. The shaping terms are
 not part of the scored metrics.
 
 \section{Learning}
@@ -199,7 +198,8 @@ scenarios use 10/12/14 intruders ($p{=}0.6/0.2/0.2$).
 \paragraph{Schedule and selection.} 1000M steps from scratch (404-D
 observation; learning rate $3\cdot10^{-4}\to3\cdot10^{-5}$, entropy coefficient
 $0.01\to0.002$), then fine-tuning stages, each on a 300M-step schedule
-(effective learning rate $3.1\cdot10^{-5}\to10^{-5}$, entropy $0.003\to0.001$):
+(effective learning rate $\approx3\cdot10^{-5}\to10^{-5}$, entropy $0.003\to0.001$,
+as SB3 counts resumed steps):
 \emph{time-aware} (elapsed time, timeout as failure, avoidable-only constraint;
 from the main run's final checkpoint, 1000M; best checkpoint at 1070M),
 \emph{geodesic} (route potential and hint; restarts the schedule at 1070M,
@@ -227,10 +227,11 @@ paired per scenario with a scenario-cluster BCa bootstrap and SA failure changes
 with an exact McNemar test (SciPy). Controls continue a stage for as many
 steps without any change (\autoref{tab:stages}). Only the geodesic stage
 reduces MA failures significantly relative to its predecessor (1070M: $-16$
-[$-30$, $-3$] per 1000 scenarios; pooled with seed 777 $-23$ [$-34.5$, $-13$],
-and in all three seed repeats, \S\ref{sec:limits}); the effect grew monotonically during the fine-tune
-(82$\to$72$\to$63$\to$62 failures at 1087M, 1165M, 1177M, 1185M) while safety
-events stayed at 0.022--0.025 per aircraft. SA failures (9$\to$4) do not
+[$-30$, $-3$] per 1000 scenarios, i.e.\ 10{,}000 MA flights; pooled with seed
+777 $-23$ [$-34.5$, $-13$]) at unchanged safety events (0.022--0.025 per
+aircraft). We stopped this stage at 1185M while monitoring seed 42, so these
+estimates are optimistic; seed repeats stopped at the same step without monitoring give
+reductions of 11--18 (\S\ref{sec:limits}). SA failures (9$\to$4) do not
 change significantly ($p{=}0.18$). Against the time-aware control, which
 trained twice as long (230M vs 115M steps), the geodesic checkpoint has 17 [5,
 31] fewer MA failures per 1000 scenarios on seed 42 and 26 [11, 43] fewer on a
@@ -238,7 +239,7 @@ second stream (seed 777), with a tied (seed 42) or higher (seed 777: $+0.32$
 [0.03, 0.64]) selection score. This comparison mixes the geodesic change
 with a schedule restart (at 1070M learning rate $3.0$ vs.\ $2.6\cdot10^{-5}$,
 entropy 0.0030 vs.\ 0.0025); restarts alone did not reduce MA failures (main
-$+$300M, \autoref{tab:stages}; the unchanged continuation below).
+$+$300M, \autoref{tab:stages}; the pre-specified unchanged continuation below).
 The indecision costs shorten flights instead: pooled over seeds 42 and 777
 (2000 scenarios per track), the submitted policy flies 4.2\,s [2.4, 6.0]
 less per MA flight and 10.5\,s [4.1, 16.9] less per SA flight than the 1185M
@@ -246,29 +247,32 @@ checkpoint, with unchanged violations and MA failures ($-2.5$ [$-12$, $+6.5$]
 per 1000 scenarios; score $+0.17$ [$+0.01$, $+0.35$]). The control that
 continues the geodesic stage for the same 185M steps without the costs flies
 2.6\,s [0.8, 4.6] (MA) and 7.5\,s [1.9, 13.4] (SA) longer than the submitted
-policy, and the effect replicates in all three seed repeats
-(\S\ref{sec:limits}). The training curves (Fig.~\ref{fig:training}) agree:
-violations fall five-fold in the first 100M steps, and in the fine-tunes MA
-timeouts keep falling under the geodesic potential but not in its control.
+policy; the shortening relative to 1185M replicates in all three seed
+repeats, which lack this control (\S\ref{sec:limits}). In the training curves (Fig.~\ref{fig:training}), MA timeouts keep falling
+under the geodesic potential but not in its control.
 
 \paragraph{Classical reference and denser traffic.} MVP
 (\autoref{tab:results}) has perfect state information and resolves
 cooperatively in MA. It completes as many MA flights as the policy but has 0.72
 safety events per aircraft (policy: 0.024), mostly RA entries, as its
-manoeuvres ignore the areas; flown direct, it has fewer intrusions (0.004) and
-99.96\% completion at 0.80 RA events. With denser traffic than in training
+manoeuvres ignore the areas. Its MA intrusions are more frequent (0.098 vs.\
+0.008) but last 1.2\,s instead of 42\,s, so its intrusion time is lower (0.12
+vs.\ 0.35\,s). Flown direct, MVP has fewer intrusions than the policy (0.004)
+and 99.96\% completion at 0.80 RA events. With denser traffic than in training
 (\BSB, 300 scenarios per size; ten aircraft observed at most), the policy
 completes 97.6\% of MA flights with 30 aircraft at 0.036 intrusion events per
 aircraft (fly-direct: 2.67), and 99.3\% of SA flights with 30 intruders at
 0.54 (fly-direct: 3.49).
 
-\paragraph{Pre-registered final experiments.} We pre-registered five
-candidates and a decision rule (commit \texttt{34dc71b}, 2026-11-15,
-\nolinkurl{docs/solution/EXPERIMENTS_2026-11.md}): a uniform weight
+\paragraph{Pre-specified final experiments.} Before running them, we fixed
+five candidates and a decision rule (commit \texttt{34dc71b}, 2026-11-15,
+\nolinkurl{docs/solution/EXPERIMENTS_2026-11.md}; replace the policy only if
+pooled MA failures or the score improve significantly without a safety
+regression, confirmed on seed 9001): a uniform weight
 average~\citep{wortsman2022soups} and a decision-time ensemble of the four
 last-stage runs (\S\ref{sec:limits}), and 150M further steps of the submitted
-policy with prioritized level replay~\citep{jiang2021plr} of 576 mined hard
-scenarios (no goal inside an RA), with a doubled time cost, or unchanged. None qualified: paired over seeds
+policy with prioritized level replay~\citep{jiang2021plr} of 576 hard
+scenarios mined on training seeds (no goal inside an RA), with a doubled time cost, or unchanged. None qualified: paired over seeds
 42 and 777, MA failures change by $-3$ to $+3.5$ per 1000 scenarios (all CIs
 include 0), no score difference is significant, and none reduces the 50 of 136
 MA failures with a goal inside an RA.
@@ -280,10 +284,9 @@ MA failures with a goal inside an RA.
 continuing a stage unchanged (dashed: time-aware; dotted: geodesic without the
 indecision costs): competition-configuration episodes of the stochastic
 training rollouts, episode-weighted over 10M (left) and 5M (right) steps;
-grey vertical lines: stage starts. Multipliers (colour per type; dashed:
-time-aware control): capped at 8 in the main run; the geodesic stage takes them
-from the time-aware run's last state (1300M), its weights from the best
-checkpoint (1070M).}
+grey vertical lines: stage starts. Multipliers (dashed: time-aware control) are
+capped at 8 in the main run; the geodesic stage starts from the time-aware
+run's last $\lambda$ (1300M) and best weights (1070M).}
 \label{fig:training}
 \end{figure}
 
@@ -314,8 +317,8 @@ geodesic (1185M) & 4\,/\,62 & 988\,/\,921 & $-21$ [$-41$, $-5$]\\
 
 \section{Failure analysis}\label{sec:failures}
 \paragraph{SA violations are mostly unavoidable.} In exact replays we branched
-each action 10--160\,s before every violation (a diagnostic only). Of 136 intrusions in
-1000 episodes of seed 777, 116 exist at $t{=}0$ (the intruder spawns
+each action 10--160\,s before every violation (a diagnostic only). Of the submitted policy's 136
+intrusions in 1000 episodes of seed 777, 116 exist at $t{=}0$ (the intruder spawns
 within 5\,NM); an escape was found for 5 of the other 20, and for 9/15 RA and
 4/6 sector-exit events.
 
@@ -329,10 +332,10 @@ their goal inside an RA. We decided \emph{not} to enter
 RAs for deep goals, which would gain 0.23 points of MA completion at the
 cost of safety events. For shallow goals the policy does poorly
 (Fig.~\ref{fig:traj}b): the 1185M checkpoint reaches 14\% of 265 held-out ones
-and enters the area in 37\%, as its route hint aims inside the area while the
-safety cost keeps it out. Aiming the route field just outside the area and
+and enters the area in 37\%, probably because its route hint aims inside the
+area while the safety cost penalises entering. Aiming the route field just outside the area and
 replaying mined hard scenarios nearly doubles shallow-goal capture (27\% [22,
-33]) but leaves entries (36\%) and failures unchanged; not submitted.
+33]) but leaves entries (36\%) and overall MA failures unchanged; not submitted.
 
 \paragraph{The other MA failures are long detours around RA clusters.} All 33 MA
 failures with a goal outside every RA have an RA cluster across the straight
@@ -363,7 +366,7 @@ total & 62 & 61\\
 \end{tabular}
 \end{table}
 
-\paragraph{The indecision costs remove heading chatter; wrong-side detours remain.}
+\paragraph{The indecision costs reduce heading chatter; wrong-side detours remain.}
 Against the shortest area-free route (grid path, string-pulled) at the
 policy's top ground speed (322\,kt), successful seed-42 MA flights of the 1185M
 checkpoint lose 54\,s on average; half of it comes from the slowest 10\% of
@@ -371,7 +374,7 @@ the flights whose straight line crosses an RA (5\% of flights, $+518$\,s each,
 446\,s of it extra path). Two thirds of these pass an area on the other side than the
 shortest route, a quarter loop, and they flip the heading offset across the
 goal bearing ($\geq$22$^\circ$) 40 times per flight (other crossing flights:
-18). Trained in as costs, commitment works: flips fall from 40 to 16 (tail) and from 18 to 3
+18). With the costs, flips fall from 40 to 16 (tail) and from 18 to 3
 (other crossing flights) per flight, the tail flies at top speed
 in 77\% instead of 67\% of its decisions, and the mean excess drops to 50\,s,
 while the tail's extra path (449\,s vs.\ 446\,s) and wrong-side share (65\%
@@ -383,22 +386,22 @@ stage decisions and the final experiments, so \autoref{tab:results} may be
 optimistically biased; on seed 9001, which no decision used, the policy does as
 well. Checkpoint selection used 20 MA scenarios (200 agent-episodes, about one
 failure per evaluation), too few to resolve MA failures. Seed repeats re-train
-both fine-tuning stages from the 1070M checkpoint with new seeds. The geodesic stage's MA-failure
+the geodesic and indecision-cost stages from 1070M with new seeds; the earlier
+stages ran once. The geodesic stage's MA-failure
 reduction replicates: against 1070M, pooled over seeds 42 and 777, the
 repeats' geodesic checkpoints have 11 [0.5, 22], 15.5 [5.5, 26.5] and 18 [8,
 29] fewer failures per 1000 scenarios (ours: 23 [13, 34.5]), all with a higher
-score. Pooled over seeds 42 and 777, the
+score; at 1185M they have 5--12 more MA failures than our checkpoint. The
 three repeats end with 5.5, 7 and 1.5 more MA failures per 1000 scenarios than
 ours (mean $+4.7$ [$-4$, $+13.5$], 0.05 points of MA completion; score $-0.11$
 [$-0.23$, $+0.03$] by scenario-cluster bootstrap, $p=0.03$ in a one-sample
-$t$-test over the three runs): our run is a favourable draw. The
-indecision-cost stage replicates: averaged over the four runs, it shortens MA
+$t$-test over the three runs): our run is a favourable draw. Relative
+to its start, the indecision-cost stage replicates: averaged over the four runs, it shortens MA
 flights by 6.5\,s [5.5, 7.4] and SA flights by 9.4\,s [6.0, 12.9] and raises
 the score by 0.15 [0.07, 0.24] with unchanged violations, and MA failures fall
-in every run ($-5$ [$-10.5$, $+0.5$]). The selection score is our own; the judges weigh the
-metrics jointly.
+in every run ($-5$ [$-10.5$, $+0.5$]).
 
-\paragraph{Reproducibility.} Code (MIT licence), trained model, per-episode CSVs and one
+\paragraph{Reproducibility.} Code (MIT licence), trained model, per-episode CSVs, training logs and one
 command per table, figure and seed repeat (\texttt{SUBMISSION.md}) are at
 \url{https://github.com/M-Colley/ai4realnet-atc-ppo}. The videos show five MA
 scenarios picked by a fixed rule from 300 (\texttt{atc\_agent.select\_video}).
